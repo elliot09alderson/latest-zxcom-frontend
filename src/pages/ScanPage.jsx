@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   AlertTriangle, XCircle, ShieldOff, CalendarOff,
-  PartyPopper, Trophy, Sparkles, Gift,
+  Ticket, Sparkles, BadgePercent,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../config/api';
@@ -69,13 +69,13 @@ function SuccessScreen({ merchantName }) {
             className="w-20 h-20 rounded-full bg-gradient-to-br from-[#e94560] to-[#c23616] flex items-center justify-center"
           >
             <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.6, type: 'spring', stiffness: 300 }}>
-              <PartyPopper className="w-9 h-9 text-white" />
+              <Ticket className="w-9 h-9 text-white" />
             </motion.div>
           </motion.div>
         </motion.div>
 
         <motion.h1 initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }} className="text-2xl sm:text-3xl font-extrabold text-white mb-2">
-          You're in the draw!
+          Your Offer Card is Ready!
         </motion.h1>
 
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.65 }} className="flex items-center justify-center gap-2 mb-5">
@@ -93,8 +93,8 @@ function SuccessScreen({ merchantName }) {
 
         <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 1 }} className="p-3 rounded-xl bg-gradient-to-r from-[#e94560]/15 to-[#f59e0b]/15 border border-[#e94560]/20">
           <div className="flex items-center justify-center gap-2">
-            <Gift className="w-4 h-4 text-[#e94560]" />
-            <span className="text-sm font-medium text-white/80">Winners will be announced soon. Good luck!</span>
+            <BadgePercent className="w-4 h-4 text-[#e94560]" />
+            <span className="text-sm font-medium text-white/80">Get exclusive offers &amp; deals on your card</span>
           </div>
         </motion.div>
 
