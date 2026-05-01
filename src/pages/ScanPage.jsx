@@ -168,7 +168,7 @@ export default function ScanPage() {
       setStep(2);
       toast.success('Entry submitted successfully!');
       setTimeout(() => {
-        window.location.href = `https://zxmoney.in/${formData.phone}`;
+        window.location.href = `https://zxmoney.in/${formData.phone}?name=${encodeURIComponent(formData.name || '')}`;
       }, 2000);
     } catch (err) {
       toast.error(err.response?.data?.message || 'Submission failed. Please try again.');
