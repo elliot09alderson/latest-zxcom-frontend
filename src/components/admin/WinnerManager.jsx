@@ -85,21 +85,26 @@ export default function WinnerManager() {
     }
   };
 
+  const getWinnerName = (row) =>
+    row.customer_id?.name || row.promoter_id?.name || row.merchant_id?.name || row.winner_name || '-';
+  const getWinnerPhone = (row) =>
+    row.customer_id?.phone || row.promoter_id?.phone || row.merchant_id?.phone || row.winner_phone || '-';
+
   const columns = [
     {
       key: 'name',
       label: 'Winner Name',
-      render: (val, row) => val || row.winner_name || '-',
+      render: (_, row) => getWinnerName(row),
     },
     {
       key: 'phone',
       label: 'Phone',
-      render: (val, row) => val || row.winner_phone || '-',
+      render: (_, row) => getWinnerPhone(row),
     },
     {
       key: 'contest_title',
       label: 'Contest',
-      render: (val, row) => val || row.contest?.title || '-',
+      render: (val, row) => row.contest_id?.title || val || '-',
     },
     {
       key: 'prize',
@@ -109,7 +114,10 @@ export default function WinnerManager() {
     {
       key: 'selected_at',
       label: 'Selected Date',
-      render: (val) => val ? new Date(val).toLocaleDateString('en-IN') : '-',
+      render: (val, row) => {
+        const d = val || row.createdAt;
+        return d ? new Date(d).toLocaleDateString('en-IN') : '-';
+      },
     },
     {
       key: 'published',

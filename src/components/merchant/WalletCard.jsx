@@ -20,6 +20,7 @@ export default function WalletCard() {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [payoutOpen, setPayoutOpen] = useState(false);
   const [amount, setAmount] = useState('');
+  const [payoutUpi, setPayoutUpi] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   const [beneficiaryOpen, setBeneficiaryOpen] = useState(false);
@@ -102,10 +103,11 @@ export default function WalletCard() {
     }
     setSubmitting(true);
     try {
-      await api.post('/merchants/wallet/payout-request', { amount: amt });
+      await api.post('/merchants/wallet/payout-request', { amount: amt, upi_vpa: payoutUpi.trim() });
       toast.success('Payout requested — admin will review shortly');
       setPayoutOpen(false);
       setAmount('');
+      setPayoutUpi('');
       await load();
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to request payout');
@@ -166,6 +168,7 @@ export default function WalletCard() {
                   openBeneficiary();
                   return;
                 }
+                setPayoutUpi(d.beneficiary?.upi_vpa || '');
                 setPayoutOpen(true);
               }}
               disabled={available <= 0}
@@ -353,6 +356,13 @@ export default function WalletCard() {
             onChange={(e) => setAmount(e.target.value)}
             placeholder={`Up to ${available.toFixed(2)}`}
             required
+          />
+          <Input
+            label="UPI ID (for this payout)"
+            type="text"
+            value={payoutUpi}
+            onChange={(e) => setPayoutUpi(e.target.value)}
+            placeholder="e.g. name@upi"
           />
 
           {/* Live deduction preview — shows what the merchant actually receives */}

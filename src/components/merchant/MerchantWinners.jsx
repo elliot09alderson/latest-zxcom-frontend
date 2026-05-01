@@ -9,11 +9,14 @@ import EmptyState from '../ui/EmptyState';
 const API_BASE = import.meta.env.VITE_API_URL?.replace('/api', '') || '';
 const fullUrl = (url) => url ? (url.startsWith('http') ? url : `${API_BASE}${url}`) : '';
 
+const maskPhone = (p) => p ? `${p.slice(0, -6)}${'*'.repeat(6)}` : '';
+
 function WinnerCard({ winner, idx }) {
   const name = winner.customer_id?.name || winner.customer_name || winner.name || 'Winner';
-  const phone = winner.customer_id?.phone || winner.phone || '';
+  const phone = maskPhone(winner.customer_id?.phone || winner.phone || '');
   const photo = fullUrl(winner.customer_id?.profile_photo_url || '');
   const contest = winner.contest_id?.title || winner.contest_name || winner.contest || 'Contest';
+  const prize = winner.contest_id?.prize_amount || winner.prize_amount || 0;
   const date = winner.selected_at || winner.date || winner.createdAt;
 
   return (
@@ -49,13 +52,18 @@ function WinnerCard({ winner, idx }) {
         </div>
       </div>
 
-      <div className="flex items-center gap-1.5 mt-4 pt-3 border-t border-white/5">
-        <Calendar className="w-3 h-3 text-white/30" />
-        <span className="text-xs text-white/40">
-          {date
-            ? new Date(date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
-            : '--'}
-        </span>
+      <div className="flex items-center justify-between mt-4 pt-3 border-t border-white/5">
+        <div className="flex items-center gap-1.5">
+          <Calendar className="w-3 h-3 text-white/30" />
+          <span className="text-xs text-white/40">
+            {date
+              ? new Date(date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+              : '--'}
+          </span>
+        </div>
+        {prize > 0 && (
+          <span className="text-xs font-semibold text-amber-400">₹{prize.toLocaleString('en-IN')}</span>
+        )}
       </div>
     </motion.div>
   );
@@ -68,13 +76,11 @@ const tabs = [
 
 export default function MerchantWinners() {
   const [active, setActive] = useState('my');
-  const { data: myData, loading: myLoading } = useFetch('/merchants/winners');
-  const { data: globalData, loading: globalLoading } = useFetch('/public/winners');
+  const { data, loading } = useFetch('/merchants/winners');
 
-  const myWinners = myData?.winners || [];
-  const globalWinners = globalData?.winners || [];
+  const myWinners = data?.winners || [];
+  const globalWinners = data?.all_winners || [];
   const winners = active === 'my' ? myWinners : globalWinners;
-  const loading = active === 'my' ? myLoading : globalLoading;
 
   return (
     <div className="space-y-5">

@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Gift, Trophy, Award, Users, Store, Settings, BarChart3, Package,
   UserCheck, Eye, Wallet, ShoppingBag, Truck,
   Repeat, Trash2, Phone as PhoneIcon, Mail, ShoppingCart,
-  Crown,
+  Crown, Coins,
 } from 'lucide-react';
 import useFetch from '../../hooks/useFetch';
 import api from '../../config/api';
@@ -38,8 +38,9 @@ const fullUrl = (url) => url ? (url.startsWith('http') ? url : `${API_BASE}${url
 
 export default function AdminCustomers() {
   const { data, loading, error, refetch } = useFetch('/admin/customers');
+  const { data: zxmoneyData, loading: zxmoneyLoading, refetch: refetchZxmoney } = useFetch('/admin/zxmoney-users');
   const [selected, setSelected] = useState(null);
-  const [tab, setTab] = useState('customers');     // 'customers' | 'users'
+  const [tab, setTab] = useState('customers');     // 'customers' | 'users' | 'zxmoney'
   const [freePhoneInput, setFreePhoneInput] = useState('');
   const [freePhoneBusy, setFreePhoneBusy] = useState(false);
 
@@ -133,6 +134,46 @@ export default function AdminCustomers() {
     },
   ];
 
+  // ── Tab 3: ZXMONEY users ──
+  const zxmoneyUsers = zxmoneyData?.zxmoney_users || [];
+
+  const zxmoneyColumns = [
+    { key: 'name', label: 'Name' },
+    { key: 'phone', label: 'Phone' },
+    {
+      key: 'role', label: 'Role',
+      render: (v) => <Badge text={v || 'customer'} variant={v === 'admin' ? 'danger' : 'default'} />,
+      export: (v) => v || 'customer',
+    },
+    {
+      key: 'walletBalance', label: 'Wallet',
+      render: (v) => <span className="text-emerald-400 font-medium">₹{(v || 0).toLocaleString('en-IN')}</span>,
+      export: (v) => `₹${v || 0}`,
+    },
+    {
+      key: 'earnedBalance', label: 'Earned',
+      render: (v) => <span className="text-amber-400 font-medium">₹{(v || 0).toLocaleString('en-IN')}</span>,
+      export: (v) => `₹${v || 0}`,
+    },
+    {
+      key: 'lastLoginAt', label: 'Last Login',
+      render: (v) => v ? new Date(v).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '-',
+      export: (v) => v ? new Date(v).toLocaleDateString('en-IN') : '',
+    },
+    {
+      key: 'pending_otp', label: 'Pending OTP',
+      render: (v) => v
+        ? <span className="font-mono text-sm font-bold text-yellow-400 bg-yellow-400/10 px-2 py-0.5 rounded-lg tracking-widest">{v}</span>
+        : <span className="text-white/20 text-xs">—</span>,
+      export: (v) => v || '',
+    },
+    {
+      key: 'createdAt', label: 'Joined',
+      render: (v) => v ? new Date(v).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '-',
+      export: (v) => v ? new Date(v).toLocaleDateString('en-IN') : '',
+    },
+  ];
+
   // ── Delete handlers ──
   const handleDeleteCustomer = async (row) => {
     try {
@@ -187,7 +228,7 @@ export default function AdminCustomers() {
             <div>
               <h2 className="text-xl font-bold text-white">Customers</h2>
               <p className="text-xs text-white/40">
-                {customers.length} from QR scans · {users.length} direct ZXCOM signups
+                {customers.length} from QR scans · {users.length} ZXCOM signups · {zxmoneyUsers.length} ZXMONEY users
               </p>
             </div>
           </div>
@@ -235,6 +276,7 @@ export default function AdminCustomers() {
           {[
             { key: 'customers', label: 'Customers', icon: UserCheck, count: customers.length, hint: 'From QR scans' },
             { key: 'users', label: 'Users', icon: ShoppingCart, count: users.length, hint: 'Direct ZXCOM signups' },
+            { key: 'zxmoney', label: 'ZXMONEY', icon: Coins, count: zxmoneyUsers.length, hint: 'ZXMONEY app users' },
           ].map((t) => (
             <button
               key={t.key}
@@ -268,7 +310,7 @@ export default function AdminCustomers() {
             onDeleteAll={handleDeleteAllCustomers}
             emptyMessage="No customers yet. They'll appear here once they submit forms via QR."
           />
-        ) : (
+        ) : tab === 'users' ? (
           <DataTable
             columns={userColumns}
             data={users}
@@ -279,6 +321,19 @@ export default function AdminCustomers() {
             exportable
             onDelete={handleDeleteUser}
             emptyMessage="No direct-signup users. People who registered on ZXCOM (without scanning a QR) will appear here."
+          />
+        ) : zxmoneyLoading ? (
+          <div className="flex items-center justify-center py-16"><Spinner size="lg" /></div>
+        ) : (
+          <DataTable
+            columns={zxmoneyColumns}
+            data={zxmoneyUsers}
+            title="ZXMONEY Users"
+            exportFilename="zxmoney-users"
+            searchable
+            searchPlaceholder="Search by name, phone..."
+            exportable
+            emptyMessage="No ZXMONEY users found."
           />
         )}
 

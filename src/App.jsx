@@ -6,6 +6,7 @@ import ProtectedRoute from './components/auth/ProtectedRoute';
 
 // Public pages
 import HomePage from './pages/HomePage';
+import SsoPage from './pages/SsoPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import MemberLoginPage from './pages/MemberLoginPage';
@@ -90,6 +91,7 @@ function App() {
   return (
     <Routes>
       {/* Public routes */}
+      <Route path="/sso" element={<SsoPage />} />
       <Route path="/" element={<HomePage />} />
       <Route path="/login" element={user ? <Navigate to={getDashboardRedirect()} /> : <LoginPage />} />
       <Route path="/register" element={<RegisterRoute />} />
