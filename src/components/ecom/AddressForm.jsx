@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, MapPin, Home, Briefcase, Building2, Tag } from 'lucide-react';
+import { X, MapPin, Home, Briefcase, Building2, Tag, Navigation, CheckCircle2 } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 const labelOptions = [
   { id: 'Home', icon: Home, color: '#10b981' },
@@ -28,15 +29,88 @@ const emptyForm = {
   state: '',
   pincode: '',
   is_default: false,
+  lat: '',
+  lng: '',
+};
+
+// Nominatim returns state names that sometimes differ from our dropdown list.
+// Normalise common variants so the pre-fill matches our <select> options.
+const normaliseState = (raw) => {
+  if (!raw) return '';
+  const s = raw.trim();
+  const map = {
+    'NCT': 'Delhi',
+    'National Capital Territory of Delhi': 'Delhi',
+    'Delhi NCT': 'Delhi',
+    'Jammu and Kashmir': 'Jammu and Kashmir',
+    'Orissa': 'Odisha',
+    'Puducherry UT': 'Puducherry',
+  };
+  return map[s] || s;
 };
 
 export default function AddressForm({ open, onClose, onSubmit, editData, loading }) {
   const [form, setForm] = useState(emptyForm);
   const [errors, setErrors] = useState({});
+  const [locating, setLocating] = useState(false);
+
+  const captureLiveLocation = () => {
+    if (!navigator.geolocation) {
+      toast.error('Geolocation is not supported by your browser');
+      return;
+    }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const { latitude, longitude } = position.coords;
+        try {
+          const res = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`,
+          );
+          const data = await res.json();
+          const addr = data?.address || {};
+          const line1Parts = [addr.house_number, addr.road].filter(Boolean).join(' ');
+          const line2Parts = [addr.neighbourhood || addr.suburb, addr.city_district].filter(Boolean).join(', ');
+          const city = addr.city || addr.town || addr.village || addr.county || '';
+          const state = normaliseState(addr.state || addr.state_district || '');
+          const pincode = addr.postcode || '';
+
+          setForm((prev) => ({
+            ...prev,
+            address_line1: line1Parts || prev.address_line1 || data?.display_name?.split(',')[0] || '',
+            address_line2: line2Parts || prev.address_line2,
+            city: city || prev.city,
+            state: state || prev.state,
+            pincode: pincode || prev.pincode,
+            lat: latitude.toString(),
+            lng: longitude.toString(),
+          }));
+          setErrors({});
+          toast.success(pincode ? `Location captured · Pincode ${pincode}` : 'Location captured — please verify pincode');
+        } catch {
+          // Reverse-geocode failed but we still have coords — stash them anyway.
+          setForm((prev) => ({ ...prev, lat: latitude.toString(), lng: longitude.toString() }));
+          toast.error('Could not resolve address. Coordinates saved — fill the rest manually.');
+        } finally {
+          setLocating(false);
+        }
+      },
+      (err) => {
+        setLocating(false);
+        toast.error(err.code === 1 ? 'Location permission denied' : 'Could not get your location');
+      },
+      { enableHighAccuracy: true, timeout: 15000 },
+    );
+  };
 
   useEffect(() => {
     if (editData) {
-      setForm({ ...emptyForm, ...editData });
+      setForm({
+        ...emptyForm,
+        ...editData,
+        lat: editData.location?.lat?.toString() || '',
+        lng: editData.location?.lng?.toString() || '',
+      });
     } else {
       setForm(emptyForm);
     }
@@ -124,6 +198,45 @@ export default function AddressForm({ open, onClose, onSubmit, editData, loading
 
               {/* Form */}
               <form onSubmit={handleSubmit} className="p-5 space-y-4">
+                {/* Live location capture */}
+                <div className={`rounded-2xl border p-3 ${
+                  form.lat && form.lng
+                    ? 'border-emerald-500/30 bg-emerald-500/5'
+                    : 'border-[#e94560]/30 bg-[#e94560]/5'
+                }`}>
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-white flex items-center gap-1.5">
+                        {form.lat && form.lng ? (
+                          <>
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                            Location captured
+                          </>
+                        ) : (
+                          <>
+                            <Navigation className="w-3.5 h-3.5 text-[#e94560]" />
+                            Use my live location
+                          </>
+                        )}
+                      </p>
+                      <p className="text-[11px] text-white/50 mt-0.5">
+                        {form.lat && form.lng
+                          ? `${Number(form.lat).toFixed(5)}, ${Number(form.lng).toFixed(5)}`
+                          : 'We\'ll auto-fill address, city, state and pincode for you.'}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={captureLiveLocation}
+                      disabled={locating}
+                      className="flex-shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl border border-[#e94560]/40 bg-[#e94560]/10 text-xs font-semibold text-[#e94560] hover:bg-[#e94560]/20 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-wait"
+                    >
+                      <Navigation className={`w-3.5 h-3.5 ${locating ? 'animate-pulse' : ''}`} />
+                      {locating ? 'Locating…' : form.lat ? 'Re-detect' : 'Detect'}
+                    </button>
+                  </div>
+                </div>
+
                 {/* Label Selector */}
                 <div>
                   <label className="block text-white/50 text-xs font-medium mb-2">Address Type</label>

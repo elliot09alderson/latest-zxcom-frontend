@@ -14,7 +14,13 @@ import Spinner from '../ui/Spinner';
 const CONFIG_FIELDS = [
   { key: 'commission_percentage', label: 'Level 1: Direct Promoter Commission', suffix: '%', type: 'number', step: '0.1' },
   { key: 'area_manager_override_percent', label: 'Level 2: Area Manager Override', suffix: '%', type: 'number', step: '0.1' },
-  { key: 'ecom_merchant_commission_percent', label: 'Merchant Ecom Order Commission', suffix: '%', type: 'number', step: '0.1' },
+  // Merchant ecom commission is now configured per-product on the Products page
+  // (commission_type + commission_value). No global config field for it.
+  { key: 'tds_rate_percent', label: 'TDS Rate (Section 194H)', suffix: '%', type: 'number', step: '0.1' },
+  { key: 'tds_no_pan_rate_percent', label: 'TDS Rate (No PAN — Section 206AA)', suffix: '%', type: 'number', step: '0.1' },
+  { key: 'tds_threshold_per_fy', label: 'TDS Threshold (per FY, 0 = always deduct)', suffix: '₹', type: 'number' },
+  { key: 'payout_gateway_fee_razorpayx', label: 'Payout Gateway Fee (RazorpayX)', suffix: '₹', type: 'number', step: '0.01' },
+  { key: 'payout_gateway_fee_manual', label: 'Payout Gateway Fee (Manual transfer)', suffix: '₹', type: 'number', step: '0.01' },
   { key: 'area_manager_promoter_target', label: 'Area Manager Promoter Target', suffix: '', type: 'number' },
   { key: 'area_manager_shop_target', label: 'Area Manager Shop Target', suffix: '', type: 'number' },
 ];

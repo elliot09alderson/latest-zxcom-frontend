@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { Star, Heart, ShoppingCart, Truck, Check } from 'lucide-react';
+import { Star, Heart, ShoppingCart, Truck, Check, AlertTriangle } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
@@ -11,10 +11,22 @@ export default function ProductCard({ product }) {
 
   const liked = isWishlisted(product.id);
   const inCart = isInCart(product.id);
+  const outOfStock = Boolean(product.isOutOfStock);
+  const lowStock = !outOfStock && typeof product.availableStock === 'number' && product.availableStock > 0 && product.availableStock <= 5;
 
   const handleAddToCart = (e) => {
     e.preventDefault();
     e.stopPropagation();
+    if (outOfStock) {
+      toast.error('Out of stock');
+      return;
+    }
+    // For clothing products we need a size before adding — push the user to
+    // the detail page instead so they can pick one.
+    if (product.isClothing) {
+      toast('Pick a size first', { icon: '\u{1F454}' });
+      return;
+    }
     addToCart(product);
     toast.success(`${product.name} added to cart`);
   };
@@ -37,10 +49,24 @@ export default function ProductCard({ product }) {
         <div className="relative aspect-[3/4] overflow-hidden bg-gradient-to-br from-white/5 to-white/[0.02]">
           <img src={product.image} alt={product.name} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" loading="lazy" />
 
-          {product.tag && (
+          {product.tag && !outOfStock && (
             <div className="absolute top-2.5 left-2.5 px-2.5 py-1 rounded-lg bg-[#e94560] text-white text-[10px] font-bold uppercase tracking-wide shadow-lg">
               {product.tag}
             </div>
+          )}
+          {outOfStock && (
+            <div className="absolute top-2.5 left-2.5 px-2.5 py-1 rounded-lg bg-red-500 text-white text-[10px] font-bold uppercase tracking-wide shadow-lg flex items-center gap-1">
+              <AlertTriangle className="w-3 h-3" />
+              Out of Stock
+            </div>
+          )}
+          {lowStock && (
+            <div className="absolute top-2.5 left-2.5 px-2.5 py-1 rounded-lg bg-amber-500 text-white text-[10px] font-bold uppercase tracking-wide shadow-lg">
+              Only {product.availableStock} left
+            </div>
+          )}
+          {outOfStock && (
+            <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px] pointer-events-none" />
           )}
 
           <motion.button
@@ -56,11 +82,16 @@ export default function ProductCard({ product }) {
           <div className="absolute bottom-0 left-0 right-0 p-3 translate-y-full group-hover:translate-y-0 transition-transform duration-300 z-10">
             <button
               onClick={handleAddToCart}
-              className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-white text-sm font-semibold transition-colors shadow-lg cursor-pointer ${
-                inCart ? 'bg-green-600 hover:bg-green-700 shadow-green-600/30' : 'bg-[#e94560] hover:bg-[#d63d56] shadow-[#e94560]/30'
+              disabled={outOfStock}
+              className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-white text-sm font-semibold transition-colors shadow-lg ${
+                outOfStock
+                  ? 'bg-white/10 text-white/40 cursor-not-allowed'
+                  : inCart
+                    ? 'bg-green-600 hover:bg-green-700 shadow-green-600/30 cursor-pointer'
+                    : 'bg-[#e94560] hover:bg-[#d63d56] shadow-[#e94560]/30 cursor-pointer'
               }`}
             >
-              {inCart ? <><Check className="w-4 h-4" /> In Cart</> : <><ShoppingCart className="w-4 h-4" /> Add to Cart</>}
+              {outOfStock ? 'Unavailable' : inCart ? <><Check className="w-4 h-4" /> In Cart</> : <><ShoppingCart className="w-4 h-4" /> Add to Cart</>}
             </button>
           </div>
         </div>

@@ -41,31 +41,46 @@ function ShopTable({ shops }) {
 
   return (
     <div className="space-y-2">
-      {shops.map((shop, i) => (
-        <motion.div
-          key={shop._id || shop.id || i}
-          initial={{ opacity: 0, x: -16 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.3, delay: i * 0.04 }}
-          className={`
-            flex items-center gap-4 p-4 rounded-xl
-            ${i < 3 ? 'bg-white/[0.06] border border-white/10' : 'bg-white/[0.02]'}
-            transition-colors hover:bg-white/[0.08]
-          `}
-        >
-          <RankBadge index={i} />
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-white truncate">
-              {shop.shop_name || shop.name}
-            </p>
-            <p className="text-xs text-white/40">{shop.area || '-'}</p>
-          </div>
-          <div className="text-right">
-            <p className="text-sm font-bold text-white">{shop.submissions ?? shop.submission_count ?? 0}</p>
-            <p className="text-xs text-white/40">submissions</p>
-          </div>
-        </motion.div>
-      ))}
+      {shops.map((shop, i) => {
+        // Backend returns the full Merchant doc with user_id populated.
+        // Field names differ across the data shapes that have ever been
+        // served — fall through gracefully.
+        const shopName = shop.shop_name || shop.name || 'Unnamed shop';
+        const ownerName = shop.user_id?.name || '';
+        const area = shop.area || shop.city || '';
+        const subs = shop.current_month_submissions ?? shop.submissions ?? shop.submission_count ?? 0;
+        const cap = shop.monthly_submission_cap;
+        return (
+          <motion.div
+            key={shop._id || shop.id || i}
+            initial={{ opacity: 0, x: -16 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.3, delay: i * 0.04 }}
+            className={`
+              flex items-center gap-4 p-4 rounded-xl
+              ${i < 3 ? 'bg-white/[0.06] border border-white/10' : 'bg-white/[0.02]'}
+              transition-colors hover:bg-white/[0.08]
+            `}
+          >
+            <RankBadge index={i} />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-white truncate">{shopName}</p>
+              <p className="text-xs text-white/40 truncate">
+                {ownerName ? `${ownerName}` : ''}
+                {ownerName && area ? ' · ' : ''}
+                {area || (!ownerName ? '—' : '')}
+              </p>
+            </div>
+            <div className="text-right">
+              <p className="text-sm font-bold text-white">
+                {subs}
+                {cap ? <span className="text-white/30 font-normal text-xs"> / {cap}</span> : null}
+              </p>
+              <p className="text-xs text-white/40">this month</p>
+            </div>
+          </motion.div>
+        );
+      })}
     </div>
   );
 }
@@ -77,29 +92,48 @@ function PromoterTable({ promoters }) {
 
   return (
     <div className="space-y-2">
-      {promoters.map((p, i) => (
-        <motion.div
-          key={p._id || p.id || i}
-          initial={{ opacity: 0, x: -16 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.3, delay: i * 0.04 }}
-          className={`
-            flex items-center gap-4 p-4 rounded-xl
-            ${i < 3 ? 'bg-white/[0.06] border border-white/10' : 'bg-white/[0.02]'}
-            transition-colors hover:bg-white/[0.08]
-          `}
-        >
-          <RankBadge index={i} />
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-white truncate">{p.name}</p>
-            {p.rank && <p className="text-xs text-white/40 capitalize">{p.rank}</p>}
-          </div>
-          <div className="text-right">
-            <p className="text-sm font-bold text-white">{p.total_shops ?? p.shops_count ?? 0}</p>
-            <p className="text-xs text-white/40">shops</p>
-          </div>
-        </motion.div>
-      ))}
+      {promoters.map((p, i) => {
+        // Backend returns the Promoter doc with user_id populated.
+        const name = p.user_id?.name || p.name || p.employee_id || 'Promoter';
+        const phone = p.user_id?.phone || p.phone || '';
+        const empId = p.employee_id || '';
+        const rank = p.rank || 'promoter';
+        const shopsCount = p.total_shops_count ?? p.total_shops ?? p.shops_count ?? 0;
+        const subPromoters = p.total_promoters_count ?? p.direct_promoters?.length ?? 0;
+        const earned = Number(p.commission_earned ?? 0);
+        return (
+          <motion.div
+            key={p._id || p.id || i}
+            initial={{ opacity: 0, x: -16 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.3, delay: i * 0.04 }}
+            className={`
+              flex items-center gap-4 p-4 rounded-xl
+              ${i < 3 ? 'bg-white/[0.06] border border-white/10' : 'bg-white/[0.02]'}
+              transition-colors hover:bg-white/[0.08]
+            `}
+          >
+            <RankBadge index={i} />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-white truncate">{name}</p>
+              <p className="text-xs text-white/40 truncate">
+                {empId ? `${empId}` : ''}
+                {empId && phone ? ' · ' : ''}
+                {phone}
+                {(empId || phone) ? ' · ' : ''}
+                <span className="capitalize">{rank === 'area_manager' ? 'Area Manager' : rank}</span>
+              </p>
+            </div>
+            <div className="text-right">
+              <p className="text-sm font-bold text-white">{shopsCount} <span className="text-white/30 font-normal text-xs">shops</span></p>
+              <p className="text-[11px] text-white/40">
+                {subPromoters > 0 ? `${subPromoters} sub-promoters · ` : ''}
+                ₹{earned.toFixed(0)}
+              </p>
+            </div>
+          </motion.div>
+        );
+      })}
     </div>
   );
 }

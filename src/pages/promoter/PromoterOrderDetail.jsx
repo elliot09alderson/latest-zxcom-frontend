@@ -1,16 +1,9 @@
 import {
-  LayoutDashboard,
-  Users,
-  Store,
-  UserPlus,
-  QrCode,
-  IndianRupee,
-  CreditCard,
-  User,
-  ShoppingBag,
+  LayoutDashboard, Users, QrCode, IndianRupee, CreditCard, User,
+  UserPlus, Store, ShoppingBag,
 } from 'lucide-react';
 import DashboardLayout from '../../components/layout/DashboardLayout';
-import QRManager from '../../components/promoter/QRManager';
+import { OrderDetailContent } from '../OrderDetailPage';
 
 const sidebarLinks = [
   { path: '/promoter', label: 'Dashboard', icon: <LayoutDashboard size={18} /> },
@@ -24,10 +17,10 @@ const sidebarLinks = [
   { path: '/promoter/profile', label: 'Profile', icon: <User size={18} /> },
 ];
 
-export default function PromoterQRCodes() {
+export default function PromoterOrderDetail() {
   return (
     <DashboardLayout sidebarLinks={sidebarLinks} title="Promoter Portal">
-      <QRManager />
+      <OrderDetailContent backPath="/promoter/orders" />
     </DashboardLayout>
   );
 }

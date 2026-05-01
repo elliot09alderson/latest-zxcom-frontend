@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { QrCode, Download, UserPlus, Phone } from 'lucide-react';
+import { QrCode, Download, UserPlus, Phone, FileText } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../config/api';
 import useFetch from '../../hooks/useFetch';
@@ -20,6 +20,7 @@ export default function QRManager() {
   const [assignModal, setAssignModal] = useState(null);
   const [merchantId, setMerchantId] = useState('');
   const [assigning, setAssigning] = useState(false);
+  const [downloadingCardFor, setDownloadingCardFor] = useState(null);
 
   const qrCodes = data?.codes || [];
   const quota = data?.quota || {};
@@ -62,6 +63,39 @@ export default function QRManager() {
     const raw = qr.qr_image_url || qr.image_url || qr.qr_image || qr.url || '';
     if (!raw) return '';
     return raw.startsWith('http') ? raw : `${API_BASE}${raw}`;
+  };
+
+  /**
+   * Download the FULL styled QR card (PDF) for an assigned QR. Uses the
+   * promoter-side endpoint that auth-checks the merchant was onboarded by
+   * this promoter. The plain PNG download (handleDownload below) stays
+   * for cases where the raw QR is needed.
+   */
+  const handleDownloadCard = async (qr) => {
+    const merchantUserId = qr.merchant_id || qr.merchant?._id || qr.merchant?.user_id;
+    if (!merchantUserId) {
+      toast.error('No merchant linked to this QR yet');
+      return;
+    }
+    setDownloadingCardFor(qr._id || qr.id);
+    try {
+      const res = await api.get(`/promoters/merchant-card/${merchantUserId}`, { responseType: 'blob' });
+      const blob = new Blob([res.data], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      const slug = (qr.merchant_name || qr.merchant?.name || qr.code || 'merchant').toString().replace(/[^a-z0-9]+/gi, '-').toLowerCase();
+      link.download = `zxcom-card-${slug}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      toast.success('Card downloaded');
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to download card');
+    } finally {
+      setDownloadingCardFor(null);
+    }
   };
 
   const handleDownload = async (qr) => {
@@ -189,26 +223,39 @@ export default function QRManager() {
                   </div>
 
                   {/* Actions */}
-                  <div className="flex gap-2">
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      icon={Download}
-                      fullWidth
-                      onClick={() => handleDownload(qr)}
-                    >
-                      Download
-                    </Button>
-                    {!isAssigned && (
+                  <div className="flex flex-col gap-2">
+                    {isAssigned && (
                       <Button
                         size="sm"
-                        icon={UserPlus}
+                        icon={FileText}
                         fullWidth
-                        onClick={() => setAssignModal(qr)}
+                        loading={downloadingCardFor === (qr._id || qr.id)}
+                        onClick={() => handleDownloadCard(qr)}
                       >
-                        Assign
+                        Download Card (PDF)
                       </Button>
                     )}
+                    <div className="flex gap-2">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        icon={Download}
+                        fullWidth
+                        onClick={() => handleDownload(qr)}
+                      >
+                        Plain QR
+                      </Button>
+                      {!isAssigned && (
+                        <Button
+                          size="sm"
+                          icon={UserPlus}
+                          fullWidth
+                          onClick={() => setAssignModal(qr)}
+                        >
+                          Assign
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 </GlassCard>
               </motion.div>

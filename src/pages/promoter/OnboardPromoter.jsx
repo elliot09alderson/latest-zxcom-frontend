@@ -2,12 +2,17 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard, User, Users, UserPlus, Store, Phone, Lock, Mail, MapPin,
-  CheckCircle, ArrowLeft, ArrowRight, Package, CreditCard, Banknote, Wallet,
+  CheckCircle, ArrowLeft, ArrowRight, Package, CreditCard,
   IndianRupee, QrCode, Copy,
+  ShoppingBag,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../config/api';
 import useRazorpay from '../../hooks/useRazorpay';
+import usePhoneCheck from '../../hooks/usePhoneCheck';
+import {
+  validateName, validatePhone, validatePassword, validateEmail, pruneErrors,
+} from '../../utils/validators';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import GlassCard from '../../components/ui/GlassCard';
 import Input from '../../components/ui/Input';
@@ -24,6 +29,7 @@ const sidebarLinks = [
   { path: '/promoter/network', label: 'Network', icon: <Users size={18} /> },
   { path: '/promoter/qr-codes', label: 'QR Codes', icon: <QrCode size={18} /> },
   { path: '/promoter/earnings', label: 'Earnings', icon: <IndianRupee size={18} /> },
+  { path: '/promoter/orders', label: 'My Orders', icon: <ShoppingBag size={18} /> },
   { path: '/promoter/id-card', label: 'ID Card', icon: <CreditCard size={18} /> },
   { path: '/promoter/profile', label: 'Profile', icon: <User size={18} /> },
 ];
@@ -43,14 +49,14 @@ export default function OnboardPromoter() {
   const [packs, setPacks] = useState([]);
   const [packsLoading, setPacksLoading] = useState(false);
   const [selectedPack, setSelectedPack] = useState(null);
-  const [paymentMode, setPaymentMode] = useState('');
-  const [paymentScreenshot, setPaymentScreenshot] = useState(null);
   const [termsAccepted, setTermsAccepted] = useState(false);
   const { initiatePayment } = useRazorpay();
 
   const [form, setForm] = useState({
     name: '', phone: '', password: '', email: '', address: '', avatar: null,
   });
+  const [errors, setErrors] = useState({});
+  const phoneCheck = usePhoneCheck(form.phone, 'promoter');
 
   useEffect(() => {
     if (step === 2 && packs.length === 0) {
@@ -66,25 +72,46 @@ export default function OnboardPromoter() {
     const { name, value, files } = e.target;
     if (files) setForm((p) => ({ ...p, [name]: files[0] || value }));
     else setForm((p) => ({ ...p, [name]: value }));
+    // Clear this field's error as the user types a new value.
+    if (errors[name]) setErrors((prev) => ({ ...prev, [name]: '' }));
   };
 
   const goToStep = (t) => { setDirection(t > step ? 1 : -1); setStep(t); };
 
   const handleStep1Next = (e) => {
     e.preventDefault();
-    if (!form.name || !form.phone || !form.password) {
-      toast.error('Name, phone, and password are required');
+    const next = pruneErrors({
+      name: validateName(form.name),
+      phone: validatePhone(form.phone),
+      password: validatePassword(form.password),
+      email: validateEmail(form.email),
+    });
+    setErrors(next);
+    if (Object.keys(next).length > 0) {
+      toast.error('Please fix the highlighted fields');
+      return;
+    }
+    if (phoneCheck.taken) {
+      toast.error(phoneCheck.reason || 'Phone unavailable for promoter onboarding');
+      return;
+    }
+    if (phoneCheck.checking) {
+      toast.error('Verifying phone, please wait…');
       return;
     }
     goToStep(2);
   };
 
   const handlePackSelect = (pack) => {
+    if (!termsAccepted) {
+      toast.error('Please accept the Promoter Terms & Conditions first');
+      return;
+    }
     setSelectedPack(pack);
-    goToStep(3);
+    launchRazorpay(pack);
   };
 
-  const submitPromoter = async (paymentData = {}) => {
+  const submitPromoter = async (pack, paymentData) => {
     setLoading(true);
     try {
       const fd = new FormData();
@@ -93,11 +120,11 @@ export default function OnboardPromoter() {
       fd.append('password', form.password);
       if (form.email) fd.append('email', form.email);
       if (form.address) fd.append('address', form.address);
-      fd.append('pack_id', selectedPack._id);
-      fd.append('payment_mode', paymentData.payment_mode || 'offline');
-      if (paymentData.razorpay_payment_id) fd.append('razorpay_payment_id', paymentData.razorpay_payment_id);
+      fd.append('pack_id', pack._id);
+      fd.append('razorpay_order_id', paymentData.razorpay_order_id);
+      fd.append('razorpay_payment_id', paymentData.razorpay_payment_id);
+      fd.append('razorpay_signature', paymentData.razorpay_signature);
       if (form.avatar) fd.append('avatar', form.avatar);
-      if (paymentScreenshot) fd.append('payment_screenshot', paymentScreenshot);
 
       const res = await api.post('/promoters/onboard-promoter', fd, {
         headers: { 'Content-Type': 'multipart/form-data' },
@@ -112,47 +139,39 @@ export default function OnboardPromoter() {
     } finally { setLoading(false); }
   };
 
-  const handleOffline = () => {
-    if (!termsAccepted) {
-      toast.error('Please accept the Promoter Terms & Conditions to continue');
-      return;
-    }
-    submitPromoter({ payment_mode: 'offline' });
-  };
-
-  const handleOnline = async () => {
-    if (!termsAccepted) {
-      toast.error('Please accept the Promoter Terms & Conditions to continue');
+  const launchRazorpay = async (pack) => {
+    // Free packs — skip Razorpay and onboard directly.
+    if (Number(pack.price || 0) === 0) {
+      await submitPromoter(pack, {
+        razorpay_order_id: '',
+        razorpay_payment_id: '',
+        razorpay_signature: '',
+      });
       return;
     }
     setLoading(true);
     try {
       const { data: orderRes } = await api.post('/payments/create-order', {
-        amount: selectedPack.price,
-        purpose: 'promoter_onboarding',
+        amount: pack.price,
+        purpose: 'promoter_registration',
       });
       const orderData = orderRes?.data || orderRes;
 
       await initiatePayment({
-        amount: orderData.amount,
+        // /payments/create-order returns amount in rupees; Razorpay needs paise.
+        amount: Math.round(Number(pack.price) * 100),
         order_id: orderData.order_id,
+        name: 'ZXCOM',
+        description: `Promoter onboarding · ${pack.name}`,
         prefill: { name: form.name, email: form.email || '', contact: form.phone },
         handler: async (response) => {
-          try {
-            await api.post('/payments/verify', {
-              razorpay_order_id: response.razorpay_order_id,
-              razorpay_payment_id: response.razorpay_payment_id,
-              razorpay_signature: response.razorpay_signature,
-            });
-            await submitPromoter({
-              payment_mode: 'online',
-              razorpay_payment_id: response.razorpay_payment_id,
-            });
-          } catch (err) {
-            toast.error(err.response?.data?.message || 'Payment verification failed');
-            setLoading(false);
-          }
+          await submitPromoter(pack, {
+            razorpay_order_id: response.razorpay_order_id,
+            razorpay_payment_id: response.razorpay_payment_id,
+            razorpay_signature: response.razorpay_signature,
+          });
         },
+        onDismiss: () => setLoading(false),
       });
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to initiate payment');
@@ -163,8 +182,6 @@ export default function OnboardPromoter() {
   const resetForm = () => {
     setForm({ name: '', phone: '', password: '', email: '', address: '', avatar: null });
     setSelectedPack(null);
-    setPaymentMode('');
-    setPaymentScreenshot(null);
     setEmployeeId('');
     setTermsAccepted(false);
     setStep(1);
@@ -182,10 +199,10 @@ export default function OnboardPromoter() {
         {/* Steps */}
         {!done && (
           <div className="flex items-center justify-center gap-3">
-            {[1, 2, 3].map((s) => (
+            {[1, 2].map((s) => (
               <div key={s} className="flex items-center gap-2">
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all ${step >= s ? 'bg-gradient-to-r from-[#e94560] to-[#c23616] text-white' : 'bg-white/10 text-white/40'}`}>{s}</div>
-                {s < 3 && <div className={`w-12 h-0.5 rounded ${step > s ? 'bg-[#e94560]' : 'bg-white/10'}`} />}
+                {s < 2 && <div className={`w-12 h-0.5 rounded ${step > s ? 'bg-[#e94560]' : 'bg-white/10'}`} />}
               </div>
             ))}
           </div>
@@ -227,12 +244,41 @@ export default function OnboardPromoter() {
                   <form onSubmit={handleStep1Next} className="space-y-4">
                     <p className="text-xs text-[#e94560] font-semibold uppercase tracking-wider mb-2">Promoter Details</p>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <Input label="Full Name" name="name" placeholder="Promoter's name" icon={User} value={form.name} onChange={updateField} required />
-                      <Input label="Phone Number" name="phone" type="tel" placeholder="Phone number" icon={Phone} value={form.phone} onChange={updateField} required />
+                      <Input label="Full Name" name="name" placeholder="Promoter's name" icon={User} value={form.name} onChange={updateField} error={errors.name} required />
+                      <div>
+                        <Input
+                          label="Phone Number"
+                          name="phone"
+                          type="tel"
+                          placeholder="10-digit phone number"
+                          icon={Phone}
+                          value={form.phone}
+                          onChange={updateField}
+                          maxLength={10}
+                          error={errors.phone || (phoneCheck.taken
+                            ? `${phoneCheck.reason || 'Phone unavailable'}${phoneCheck.name ? ` (${phoneCheck.name})` : ''}`
+                            : undefined)}
+                          required
+                        />
+                        {phoneCheck.checking && (
+                          <p className="text-[11px] text-white/40 mt-1">Checking phone…</p>
+                        )}
+                        {phoneCheck.willMerge && !phoneCheck.checking && (
+                          <p className="text-[11px] text-amber-300/90 mt-1">
+                            ⚠ This phone is already registered as a <strong>{phoneCheck.role}</strong>
+                            {phoneCheck.name ? ` (${phoneCheck.name})` : ''}.
+                            The promoter role will be added on top of the existing account.
+                            The password entered must match their existing one.
+                          </p>
+                        )}
+                        {!phoneCheck.taken && !phoneCheck.willMerge && !phoneCheck.checking && form.phone.length === 10 && !phoneCheck.error && (
+                          <p className="text-[11px] text-emerald-300/80 mt-1">Phone is available ✓</p>
+                        )}
+                      </div>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <Input label="Password" name="password" type="password" placeholder="Create password" icon={Lock} value={form.password} onChange={updateField} required />
-                      <Input label="Email" name="email" type="email" placeholder="Email (optional)" icon={Mail} value={form.email} onChange={updateField} />
+                      <Input label="Password" name="password" type="password" placeholder="Min 6 characters" icon={Lock} value={form.password} onChange={updateField} error={errors.password} required />
+                      <Input label="Email" name="email" type="email" placeholder="Email (optional)" icon={Mail} value={form.email} onChange={updateField} error={errors.email} />
                     </div>
                     <Input label="Address" name="address" placeholder="Address (optional)" icon={MapPin} value={form.address} onChange={updateField} />
                     <FileUpload label="Profile Photo" name="avatar" accept="image/*" preview onChange={updateField} />
@@ -242,13 +288,23 @@ export default function OnboardPromoter() {
                 </motion.div>
               )}
 
-              {/* STEP 2: Pack Selection */}
+              {/* STEP 2: Pack Selection + T&C → click pack opens Razorpay */}
               {step === 2 && (
                 <motion.div key="s2" custom={direction} variants={slideVariants} initial="enter" animate="center" exit="exit" transition={{ duration: 0.3 }}>
                   <div className="space-y-5">
                     <div className="text-center">
                       <h3 className="text-lg font-bold text-white">Select a Pack</h3>
-                      <p className="text-sm text-white/40 mt-1">Choose a pack for the new promoter</p>
+                      <p className="text-sm text-white/40 mt-1">Pick a pack — payment opens via Razorpay</p>
+                    </div>
+
+                    <PromoterPerks />
+
+                    <div className="border border-white/10 rounded-xl p-4">
+                      <TermsAndConditions
+                        type="promoter"
+                        accepted={termsAccepted}
+                        onAcceptedChange={setTermsAccepted}
+                      />
                     </div>
 
                     {packsLoading ? (
@@ -260,121 +316,64 @@ export default function OnboardPromoter() {
                       </div>
                     ) : (
                       <div className="grid grid-cols-1 gap-3">
-                        {packs.map((pack) => (
-                          <motion.button key={pack._id} type="button" whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-                            onClick={() => handlePackSelect(pack)}
-                            className="flex items-center gap-4 p-4 rounded-2xl border-2 transition-all cursor-pointer text-left w-full border-white/10 bg-white/5 hover:border-[#e94560]/40">
-                            <div className="p-3 rounded-xl bg-gradient-to-br from-[#e94560]/20 to-[#c23616]/10 flex-shrink-0">
-                              <Package className="w-6 h-6 text-[#e94560]" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center justify-between">
-                                <span className="text-white font-semibold">{pack.name}</span>
-                                <div className="flex items-center gap-0.5">
-                                  <IndianRupee className="w-4 h-4 text-[#e94560]" />
-                                  <span className="text-lg font-bold text-[#e94560]">{pack.price}</span>
+                        {packs.map((pack) => {
+                          const isLaunching = loading && selectedPack?._id === pack._id;
+                          return (
+                            <motion.button
+                              key={pack._id}
+                              type="button"
+                              whileHover={termsAccepted && !loading ? { scale: 1.02 } : {}}
+                              whileTap={termsAccepted && !loading ? { scale: 0.98 } : {}}
+                              onClick={() => {
+                                if (loading) return;
+                                if (phoneCheck.taken) {
+                                  toast.error(`Phone already registered as a ${phoneCheck.role || 'user'} — go back and use a different number.`);
+                                  return;
+                                }
+                                handlePackSelect(pack);
+                              }}
+                              disabled={!termsAccepted || loading || phoneCheck.taken}
+                              className={`flex items-center gap-4 p-4 rounded-2xl border-2 transition-all text-left w-full relative
+                                ${!termsAccepted || loading ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}
+                                ${selectedPack?._id === pack._id
+                                  ? 'border-[#e94560] bg-[#e94560]/10'
+                                  : 'border-white/10 bg-white/5 hover:border-[#e94560]/40'
+                                }`}
+                            >
+                              <div className="p-3 rounded-xl bg-gradient-to-br from-[#e94560]/20 to-[#c23616]/10 flex-shrink-0">
+                                <Package className="w-6 h-6 text-[#e94560]" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-white font-semibold">{pack.name}</span>
+                                  <div className="flex items-center gap-0.5">
+                                    <IndianRupee className="w-4 h-4 text-[#e94560]" />
+                                    <span className="text-lg font-bold text-[#e94560]">{pack.price}</span>
+                                  </div>
+                                </div>
+                                {pack.description && <p className="text-xs text-white/40 mt-0.5">{pack.description}</p>}
+                                <div className="flex gap-4 mt-1.5 text-[11px] text-white/30">
+                                  <span>Shopkeepers: <span className="text-white/60 font-medium">{pack.shopkeeper_limit || 0}</span></span>
+                                  <span>Promoters: <span className="text-white/60 font-medium">{pack.promoter_limit || 0}</span></span>
                                 </div>
                               </div>
-                              {pack.description && <p className="text-xs text-white/40 mt-0.5">{pack.description}</p>}
-                              <div className="flex gap-4 mt-1.5 text-[11px] text-white/30">
-                                <span>Shopkeepers: <span className="text-white/60 font-medium">{pack.shopkeeper_limit || 0}</span></span>
-                                <span>Promoters: <span className="text-white/60 font-medium">{pack.promoter_limit || 0}</span></span>
-                              </div>
-                            </div>
-                            <ArrowRight className="w-4 h-4 text-white/20 flex-shrink-0" />
-                          </motion.button>
-                        ))}
-                      </div>
-                    )}
-                    <Button variant="secondary" icon={ArrowLeft} onClick={() => goToStep(1)}>Back</Button>
-                  </div>
-                </motion.div>
-              )}
-
-              {/* STEP 3: Payment */}
-              {step === 3 && selectedPack && (
-                <motion.div key="s3" custom={direction} variants={slideVariants} initial="enter" animate="center" exit="exit" transition={{ duration: 0.3 }}>
-                  <div className="space-y-5">
-                    <div className="text-center">
-                      <h3 className="text-lg font-bold text-white">Payment</h3>
-                      <p className="text-sm text-white/40 mt-1">
-                        Pack: <span className="text-white font-medium">{selectedPack.name}</span> — <span className="text-[#e94560] font-semibold">₹{selectedPack.price}</span>
-                      </p>
-                    </div>
-
-                    <PromoterPerks />
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <motion.button type="button" whileHover={{ scale: 1.04, y: -4 }} whileTap={{ scale: 0.97 }}
-                        onClick={() => setPaymentMode('offline')}
-                        className={`flex flex-col items-center gap-3 p-5 rounded-2xl border-2 transition-all cursor-pointer ${paymentMode === 'offline' ? 'border-[#e94560] bg-[#e94560]/10 shadow-lg shadow-[#e94560]/20' : 'border-white/10 bg-white/5 hover:border-[#e94560]/40'}`}>
-                        <div className="p-3 rounded-xl bg-gradient-to-br from-amber-500/20 to-amber-600/10"><Banknote className="w-7 h-7 text-amber-400" /></div>
-                        <span className="text-white font-semibold text-sm">Offline</span>
-                        <span className="text-white/40 text-xs text-center">Pay cash & activate later</span>
-                      </motion.button>
-                      <motion.button type="button" whileHover={{ scale: 1.04, y: -4 }} whileTap={{ scale: 0.97 }}
-                        onClick={() => setPaymentMode('online')}
-                        className={`flex flex-col items-center gap-3 p-5 rounded-2xl border-2 transition-all cursor-pointer ${paymentMode === 'online' ? 'border-[#e94560] bg-[#e94560]/10 shadow-lg shadow-[#e94560]/20' : 'border-white/10 bg-white/5 hover:border-[#e94560]/40'}`}>
-                        <div className="p-3 rounded-xl bg-gradient-to-br from-emerald-500/20 to-emerald-600/10"><Wallet className="w-7 h-7 text-emerald-400" /></div>
-                        <span className="text-white font-semibold text-sm">Online</span>
-                        <span className="text-white/40 text-xs text-center">UPI, Cards, Net Banking</span>
-                      </motion.button>
-                    </div>
-
-                    <AnimatePresence mode="wait">
-                      {paymentMode === 'offline' && (
-                        <motion.div key="off" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} className="bg-amber-500/5 border border-amber-500/15 rounded-xl p-4">
-                          <p className="text-sm text-amber-200/80">Account will be created with <span className="font-semibold">pending</span> status. Admin can activate after payment.</p>
-                        </motion.div>
-                      )}
-                      {paymentMode === 'online' && (
-                        <motion.div key="on" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} className="space-y-4">
-                          <div className="bg-white rounded-2xl p-4 mx-auto w-fit shadow-lg shadow-black/40">
-                            <img
-                              src="/upi-qr-cropped.png"
-                              alt="UPI QR Code"
-                              className="w-56 h-56 object-contain mx-auto block"
-                              draggable={false}
-                            />
-                            <p className="text-center text-[10px] text-gray-500 mt-2 font-semibold tracking-wide">
-                              Scan with any UPI app
-                            </p>
-                          </div>
-                          <div className="bg-emerald-500/5 border border-emerald-500/15 rounded-xl p-4 text-center">
-                            <p className="text-sm font-medium text-emerald-200/80 mb-1">Pay ₹{selectedPack.price} via UPI</p>
-                            <p className="text-xs text-white/40">Scan the QR code above and pay using any UPI app</p>
-                            <p className="text-xs text-white/50 mt-2">After payment, upload the screenshot below</p>
-                          </div>
-                          <FileUpload
-                            label="Payment Screenshot"
-                            name="payment_screenshot"
-                            accept="image/*"
-                            preview
-                            onChange={(e) => setPaymentScreenshot(e.target.files?.[0] || null)}
-                          />
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-
-                    {paymentMode && (
-                      <div className="border-t border-white/10 pt-5">
-                        <TermsAndConditions
-                          type="promoter"
-                          accepted={termsAccepted}
-                          onAcceptedChange={setTermsAccepted}
-                        />
+                              <ArrowRight className="w-4 h-4 text-white/20 flex-shrink-0" />
+                              {isLaunching && (
+                                <div className="absolute inset-0 flex items-center justify-center rounded-2xl bg-black/60 backdrop-blur-sm">
+                                  <Spinner size="md" />
+                                </div>
+                              )}
+                            </motion.button>
+                          );
+                        })}
                       </div>
                     )}
 
-                    <div className="flex gap-3 pt-2">
-                      <Button variant="secondary" icon={ArrowLeft} onClick={() => goToStep(2)}>Back</Button>
-                      {paymentMode === 'offline' && <Button fullWidth size="lg" icon={UserPlus} loading={loading} disabled={!termsAccepted} onClick={handleOffline}>Onboard (Pay Later)</Button>}
-                      {paymentMode === 'online' && <Button fullWidth size="lg" icon={UserPlus} loading={loading} disabled={!termsAccepted} onClick={() => {
-                        if (!termsAccepted) { toast.error('Please accept the Promoter Terms & Conditions to continue'); return; }
-                        submitPromoter({ payment_mode: 'online' });
-                      }}>I've Paid — Onboard Now</Button>}
-                      {!paymentMode && <Button fullWidth size="lg" disabled>Select a payment method</Button>}
-                    </div>
+                    <p className="text-[11px] text-white/30 text-center">
+                      Secure payment via Razorpay · UPI, Cards, Net Banking, Wallets
+                    </p>
+
+                    <Button variant="secondary" icon={ArrowLeft} onClick={() => goToStep(1)} disabled={loading}>Back</Button>
                   </div>
                 </motion.div>
               )}

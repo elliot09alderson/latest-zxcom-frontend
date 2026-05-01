@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
   ShoppingCart, Plus, Minus, Trash2, MapPin, CreditCard, CheckCircle2, Lock,
+  Navigation,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import PublicLayout from '../components/layout/PublicLayout';
@@ -46,9 +47,59 @@ export default function CheckoutPage() {
     city: '',
     state: '',
     pincode: '',
+    lat: '',
+    lng: '',
   });
   const [submitting, setSubmitting] = useState(false);
   const [placedOrder, setPlacedOrder] = useState(null);
+  const [locating, setLocating] = useState(false);
+
+  const captureLiveLocation = () => {
+    if (!navigator.geolocation) {
+      toast.error('Geolocation is not supported by your browser');
+      return;
+    }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const { latitude, longitude } = position.coords;
+        try {
+          const res = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`,
+          );
+          const data = await res.json();
+          const addr = data?.address || {};
+          const line1 = [addr.house_number, addr.road].filter(Boolean).join(' ');
+          const line2 = [addr.neighbourhood || addr.suburb, addr.city_district].filter(Boolean).join(', ');
+          const city = addr.city || addr.town || addr.village || addr.county || '';
+          const stateRaw = addr.state || addr.state_district || '';
+          const state = stateRaw === 'Orissa' ? 'Odisha' : stateRaw;
+          const pincode = addr.postcode || '';
+          setAddress((prev) => ({
+            ...prev,
+            address_line1: line1 || prev.address_line1 || data?.display_name?.split(',')[0] || '',
+            address_line2: line2 || prev.address_line2,
+            city: city || prev.city,
+            state: state || prev.state,
+            pincode: pincode || prev.pincode,
+            lat: latitude.toString(),
+            lng: longitude.toString(),
+          }));
+          toast.success(pincode ? `Location captured · Pincode ${pincode}` : 'Location captured — please verify pincode');
+        } catch {
+          setAddress((prev) => ({ ...prev, lat: latitude.toString(), lng: longitude.toString() }));
+          toast.error('Could not resolve address from location — fill the rest manually');
+        } finally {
+          setLocating(false);
+        }
+      },
+      (err) => {
+        setLocating(false);
+        toast.error(err.code === 1 ? 'Location permission denied' : 'Could not get your location');
+      },
+      { enableHighAccuracy: true, timeout: 15000 },
+    );
+  };
 
   useEffect(() => {
     if (!user) {
@@ -102,10 +153,17 @@ export default function CheckoutPage() {
       await initiatePayment({
         amount: rzp.amount,
         order_id: rzp.order_id,
+        name: 'ZXCOM',
+        description: `Order ${order.order_number}`,
         prefill: {
           name: address.full_name,
           email: user?.email || '',
           contact: address.phone,
+        },
+        notes: {
+          order_number: order.order_number,
+          order_id: String(order._id),
+          user_id: String(user._id),
         },
         handler: async (response) => {
           try {
@@ -124,6 +182,11 @@ export default function CheckoutPage() {
           } finally {
             setSubmitting(false);
           }
+        },
+        onDismiss: () => {
+          // Customer closed the modal without paying — order stays `pending`.
+          setSubmitting(false);
+          toast('Payment cancelled. Your order is saved — you can retry from your orders page.', { icon: '\u26A0\uFE0F' });
         },
       });
     } catch (err) {
@@ -248,6 +311,46 @@ export default function CheckoutPage() {
                   <MapPin className="w-4 h-4 text-[#e94560]" />
                   <h2 className="text-sm font-semibold text-white">Shipping Address</h2>
                 </div>
+
+                {/* Live-location capture */}
+                <div className={`rounded-2xl border p-3 mb-4 ${
+                  address.lat && address.lng
+                    ? 'border-emerald-500/30 bg-emerald-500/5'
+                    : 'border-[#e94560]/30 bg-[#e94560]/5'
+                }`}>
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-white flex items-center gap-1.5">
+                        {address.lat && address.lng ? (
+                          <>
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                            Location captured
+                          </>
+                        ) : (
+                          <>
+                            <Navigation className="w-3.5 h-3.5 text-[#e94560]" />
+                            Use my live location
+                          </>
+                        )}
+                      </p>
+                      <p className="text-[11px] text-white/50 mt-0.5">
+                        {address.lat && address.lng
+                          ? `${Number(address.lat).toFixed(5)}, ${Number(address.lng).toFixed(5)}`
+                          : 'Auto-fills address, city, state and pincode for you.'}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={captureLiveLocation}
+                      disabled={locating}
+                      className="flex-shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl border border-[#e94560]/40 bg-[#e94560]/10 text-xs font-semibold text-[#e94560] hover:bg-[#e94560]/20 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-wait"
+                    >
+                      <Navigation className={`w-3.5 h-3.5 ${locating ? 'animate-pulse' : ''}`} />
+                      {locating ? 'Locating…' : address.lat ? 'Re-detect' : 'Detect'}
+                    </button>
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <Input label="Full Name" name="full_name" value={address.full_name} onChange={handleField} required />
                   <Input label="Phone" name="phone" value={address.phone} onChange={handleField} required />

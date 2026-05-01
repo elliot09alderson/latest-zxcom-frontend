@@ -22,8 +22,22 @@ export function AuthProvider({ children }) {
     localStorage.setItem('zxcom_token', authToken);
   }, []);
 
-  const login = useCallback(async (phone, password) => {
-    const { data: res } = await api.post('/auth/login', { phone, password });
+  /**
+   * Panel-scoped login.
+   *
+   *   login(phone, password)                    → legacy single-role login
+   *   login(phone, password, 'customer')        → customer panel (only roles ⊃ 'customer' pass)
+   *   login(phone, password, 'member')          → member panel (merchant/promoter/area_manager)
+   *   login(phone, password, 'admin')           → admin panel
+   *
+   * Backend returns the user with role=activeRole and roles=[…full list…];
+   * we persist that. A user holding multiple roles can log in to either
+   * panel — each issues a JWT scoped to that panel's role.
+   */
+  const login = useCallback(async (phone, password, panel) => {
+    const body = { phone, password };
+    if (panel) body.panel = panel;
+    const { data: res } = await api.post('/auth/login', body);
     const { user: userData, token: authToken } = res.data;
     persist(userData, authToken);
     return res;

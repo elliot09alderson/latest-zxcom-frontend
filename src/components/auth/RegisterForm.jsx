@@ -15,6 +15,7 @@ import Input from '../ui/Input';
 import Select from '../ui/Select';
 import FileUpload from '../ui/FileUpload';
 import Button from '../ui/Button';
+import Logo from '../ui/Logo';
 import TermsAndConditions from '../ui/TermsAndConditions';
 import PromoterPerks from '../ui/PromoterPerks';
 
@@ -40,7 +41,7 @@ const shopCategories = [
   { value: 'other', label: 'Other' },
 ];
 
-export default function RegisterForm() {
+export default function RegisterForm({ defaultType }) {
   const [step, setStep] = useState(1);
   const [direction, setDirection] = useState(1);
   const [role, setRole] = useState('');
@@ -53,14 +54,19 @@ export default function RegisterForm() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const refCode = searchParams.get('ref') || '';
-  // `?type=business` switches step-1 to merchant/promoter only. Default
-  // (no query) is the shopper signup — we auto-skip the role picker.
-  const registerType = searchParams.get('type') === 'business' ? 'business' : 'shopper';
+  // ?type=business or defaultType='business' switches step-1 to merchant/
+  // promoter only. Default is the shopper signup — auto-skips the role
+  // picker. The `defaultType` prop is what the new /member/register page
+  // passes so we don't have to dirty the URL with ?type=business.
+  const queryType = searchParams.get('type');
+  const registerType = (queryType === 'business' || defaultType === 'business')
+    ? 'business' : 'shopper';
 
   const [form, setForm] = useState({
     name: '',
     phone: '',
     password: '',
+    confirm_password: '',
     email: '',
     address: '',
     avatar: null,
@@ -162,18 +168,30 @@ export default function RegisterForm() {
     setStep(2);
   };
 
-  // Upload avatar (non-blocking — don't let this fail registration)
+  // Upload avatar + sync optional profile fields (email/address/name). The
+  // account already exists in the DB by this point — this just attaches any
+  // profile extras and returns the refreshed user object.
   const uploadAvatar = async (token) => {
-    if (!form.avatar) return;
     try {
       const fd = new FormData();
-      fd.append('avatar', form.avatar);
-      await api.put('/auth/profile', fd, {
+      if (form.avatar) fd.append('avatar', form.avatar);
+      // Send email + address here too so a multipart PUT can carry them
+      // alongside the photo without any second API call.
+      if (form.email) fd.append('email', form.email);
+      if (form.address) fd.append('address', form.address);
+      if (form.name) fd.append('name', form.name);
+      // Skip the network hop if there's literally nothing to upload.
+      if (!form.avatar && !form.email && !form.address) return;
+      const { data: res } = await api.put('/auth/profile', fd, {
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'multipart/form-data' },
       });
-    } catch {
-      // Avatar upload failed — not critical, continue registration
-      console.warn('Avatar upload failed, continuing registration');
+      return res?.data?.user || res?.user || null;
+    } catch (err) {
+      const msg = err.response?.data?.message || err.message || 'Photo / profile upload failed';
+      // Surface it so users know the photo didn't save — account is still
+      // created, so they can retry from the profile page later.
+      toast.error(msg + ' — account created, photo not saved');
+      return null;
     }
   };
 
@@ -199,6 +217,14 @@ export default function RegisterForm() {
     e.preventDefault();
     if (!form.name || !form.phone || !form.password) {
       toast.error('Please fill in all required fields');
+      return;
+    }
+    if (form.password.length < 6) {
+      toast.error('Password must be at least 6 characters');
+      return;
+    }
+    if (form.confirm_password !== form.password) {
+      toast.error('Passwords do not match');
       return;
     }
 
@@ -321,12 +347,8 @@ export default function RegisterForm() {
         transition={{ type: 'spring', stiffness: 200, damping: 15 }}
         className="text-center mb-6"
       >
-        <h1 className="text-3xl font-extrabold tracking-tight">
-          <span className="bg-gradient-to-r from-[#e94560] to-[#c23616] bg-clip-text text-transparent">
-            ZXCOM
-          </span>
-        </h1>
-        <p className="text-white/40 text-sm mt-1">Create your account</p>
+        <Logo size="lg" className="mx-auto" />
+        <p className="text-white/40 text-sm mt-3">Create your account</p>
       </motion.div>
 
       {/* Step Indicator — hidden when direct-entry (shopper or referral) has
@@ -466,6 +488,27 @@ export default function RegisterForm() {
                   required
                 />
                 <Input
+                  label="Confirm Password"
+                  name="confirm_password"
+                  type="password"
+                  placeholder="Re-enter password"
+                  icon={Lock}
+                  value={form.confirm_password}
+                  onChange={updateField}
+                  error={
+                    form.confirm_password && form.confirm_password !== form.password
+                      ? 'Passwords do not match'
+                      : ''
+                  }
+                  required
+                />
+              </div>
+
+              {/* Email is kept for merchant + promoter (used for business
+                  comms / TDS docs / RazorpayX contact). Hidden for the
+                  shopper signup to keep the form short. */}
+              {role !== 'customer' && (
+                <Input
                   label="Email"
                   name="email"
                   type="email"
@@ -474,7 +517,7 @@ export default function RegisterForm() {
                   value={form.email}
                   onChange={updateField}
                 />
-              </div>
+              )}
 
               <Input
                 label="Address"
@@ -527,7 +570,7 @@ export default function RegisterForm() {
                       </motion.div>
                     )}
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                      <Input label="Pincode" name="pincode" placeholder="Pincode" icon={MapPin} value={form.pincode} onChange={updateField} />
+                      <Input label="Pincode" name="pincode" placeholder="Pincode" icon={MapPin} value={form.pincode} onChange={updateField} digitsOnly maxLength={6} />
                       <Input label="Area" name="area" placeholder="Shop area" icon={MapPin} value={form.area} onChange={updateField} required />
                       <Input label="City" name="city" placeholder="City" icon={Building2} value={form.city} onChange={updateField} required />
                     </div>
@@ -573,7 +616,12 @@ export default function RegisterForm() {
                 </motion.div>
               )}
 
-              <FileUpload label="Profile Photo" name="avatar" accept="image/*" preview onChange={updateField} />
+              {/* Avatar is needed for the promoter ID card; merchants can
+                  set theirs in Profile later. Shoppers don't need it at
+                  signup — keep their form short. */}
+              {role !== 'customer' && (
+                <FileUpload label="Profile Photo" name="avatar" accept="image/*" preview onChange={updateField} />
+              )}
 
               {role === 'promoter' && (
                 <div className="border-t border-white/10 pt-5">

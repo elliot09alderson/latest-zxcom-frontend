@@ -3,8 +3,10 @@ import { Link, useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
   Package, MapPin, Truck, CheckCircle2, XCircle, Clock, ArrowLeft,
-  ExternalLink, CircleDot, CreditCard, Hash,
+  ExternalLink, CircleDot, CreditCard, Hash, FileDown, Phone, LifeBuoy,
+  ShoppingBag,
 } from 'lucide-react';
+import toast from 'react-hot-toast';
 import api from '../config/api';
 import PublicLayout from '../components/layout/PublicLayout';
 import GlassCard from '../components/ui/GlassCard';
@@ -25,13 +27,93 @@ const STATUS_META = {
 const fmtDate = (d) => d
   ? new Date(d).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' })
   : '';
+const fmtDay = (d) => d
+  ? new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+  : '';
 const fmtMoney = (n) => `₹${Number(n || 0).toLocaleString('en-IN')}`;
 
-export default function OrderDetailPage() {
+// Ordered progression used by the progress tracker strip. cancelled/refunded
+// render as a terminal "Cancelled" pill instead of following this flow.
+const FLOW_STEPS = [
+  { key: 'pending',          label: 'Placed',        icon: Package },
+  { key: 'paid',             label: 'Paid',          icon: CheckCircle2 },
+  { key: 'shipped',          label: 'Shipped',       icon: Truck },
+  { key: 'out_for_delivery', label: 'Out for Delivery', icon: Truck },
+  { key: 'delivered',        label: 'Delivered',     icon: CheckCircle2 },
+];
+
+// Map status → the index it reaches on the flow strip.
+function flowIndex(status) {
+  const i = FLOW_STEPS.findIndex((s) => s.key === status);
+  return i >= 0 ? i : 0;
+}
+
+// When is the package expected? Rough heuristic so the customer sees a
+// friendly ETA ("Arriving today", "Arriving tomorrow", or a date). Prefers
+// the courier's EDD if present, else computes from shipped/paid dates.
+function computeETA(order) {
+  const ship = order.nimbuspost?.awb_code ? order.nimbuspost
+            : order.shiprocket?.shipment_id ? order.shiprocket
+            : null;
+  const edd = ship?.expected_delivery_date || ship?.edd;
+  const base = edd
+    ? new Date(edd)
+    : order.status === 'shipped' || order.status === 'out_for_delivery'
+      ? new Date((ship?.created_at ? new Date(ship.created_at).getTime() : Date.now()) + 3 * 24 * 60 * 60 * 1000)
+      : order.paid_at
+        ? new Date(new Date(order.paid_at).getTime() + 5 * 24 * 60 * 60 * 1000)
+        : null;
+  if (!base) return null;
+  const startOfDay = (d) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
+  const today = startOfDay(new Date());
+  const tomorrow = new Date(today.getTime() + 24 * 60 * 60 * 1000);
+  const eddDay = startOfDay(base);
+  if (eddDay.getTime() === today.getTime()) return 'Arriving today';
+  if (eddDay.getTime() === tomorrow.getTime()) return 'Arriving tomorrow';
+  if (eddDay < today) return 'Arrival overdue — please contact support';
+  return `Arriving by ${fmtDay(base)}`;
+}
+
+// Business contact details — used in the help block and receipts.
+const SUPPORT = {
+  phone: '+91 62648 24626',
+  phoneDigits: '+916264824626',
+  email: 'support@zxcom.in',
+  hours: 'Mon–Sat, 10:00 AM – 7:00 PM IST',
+};
+
+/**
+ * Layout-agnostic order detail content.
+ *   backPath — URL of the orders list the caller wants to link back to.
+ */
+export function OrderDetailContent({ backPath = '/orders' }) {
   const { id } = useParams();
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [downloading, setDownloading] = useState(false);
+
+  const downloadReceipt = async () => {
+    setDownloading(true);
+    try {
+      const res = await api.get(`/orders/${id}/receipt`, { responseType: 'blob' });
+      const blob = new Blob([res.data], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const orderNum = order?.order_number || `ZX-${String(id).slice(-6).toUpperCase()}`;
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `zxcom-receipt-${orderNum}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success('Receipt downloaded');
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Could not download receipt');
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   useEffect(() => {
     (async () => {
@@ -47,20 +129,14 @@ export default function OrderDetailPage() {
   }, [id]);
 
   if (loading) {
-    return (
-      <PublicLayout>
-        <div className="flex items-center justify-center py-24"><Spinner size="lg" /></div>
-      </PublicLayout>
-    );
+    return <div className="flex items-center justify-center py-24"><Spinner size="lg" /></div>;
   }
   if (error || !order) {
     return (
-      <PublicLayout>
-        <div className="max-w-3xl mx-auto px-4 py-8 text-center">
-          <p className="text-red-400 text-sm mb-4">{error || 'Order not found'}</p>
-          <Link to="/orders" className="text-[#e94560] text-sm hover:underline">← Back to orders</Link>
-        </div>
-      </PublicLayout>
+      <div className="max-w-3xl mx-auto px-4 py-8 text-center">
+        <p className="text-red-400 text-sm mb-4">{error || 'Order not found'}</p>
+        <Link to={backPath} className="text-[#e94560] text-sm hover:underline">← Back to orders</Link>
+      </div>
     );
   }
 
@@ -75,20 +151,105 @@ export default function OrderDetailPage() {
   const history = Array.isArray(order.status_history) ? [...order.status_history].sort((a, b) => new Date(a.at) - new Date(b.at)) : [];
 
   return (
-    <PublicLayout>
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8 space-y-6">
-        {/* Back + header */}
-        <Link to="/orders" className="inline-flex items-center gap-2 text-sm text-white/50 hover:text-white transition-colors">
-          <ArrowLeft className="w-4 h-4" /> Back to orders
-        </Link>
+    <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8 space-y-6">
+      {/* Back + header */}
+      <Link to={backPath} className="inline-flex items-center gap-2 text-sm text-white/50 hover:text-white transition-colors">
+        <ArrowLeft className="w-4 h-4" /> Back to orders
+      </Link>
 
-        <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }}>
-          <div className="flex flex-wrap items-center gap-3 mb-2">
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-white">Order {order.order_number || `#${(order._id || '').slice(-6).toUpperCase()}`}</h1>
-            <Badge text={meta.label} variant={meta.variant} />
+        <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <div className="flex flex-wrap items-center gap-3 mb-2">
+              <h1 className="text-2xl sm:text-3xl font-extrabold text-white">Order {order.order_number || `#${(order._id || '').slice(-6).toUpperCase()}`}</h1>
+              <Badge text={meta.label} variant={meta.variant} />
+            </div>
+            <p className="text-xs text-white/40">Placed on {fmtDate(order.createdAt)}</p>
           </div>
-          <p className="text-xs text-white/40">Placed on {fmtDate(order.createdAt)}</p>
+          <Button icon={FileDown} onClick={downloadReceipt} loading={downloading}>
+            Download Receipt
+          </Button>
         </motion.div>
+
+        {/* Delivery progress tracker — always rendered for active orders.
+            Cancelled/refunded orders get a terminal banner instead. */}
+        {(order.status === 'cancelled' || order.status === 'refunded') ? (
+          <GlassCard className="p-5 border-red-500/30 bg-red-500/5">
+            <div className="flex items-center gap-3">
+              <XCircle className="w-5 h-5 text-red-300 flex-shrink-0" />
+              <div>
+                <p className="text-sm font-semibold text-red-200">
+                  {order.status === 'cancelled' ? 'Order cancelled' : 'Order refunded'}
+                </p>
+                <p className="text-[11px] text-white/50 mt-0.5">
+                  Need help? Contact <a href={`tel:${SUPPORT.phoneDigits}`} className="text-[#e94560] hover:underline">{SUPPORT.phone}</a>.
+                </p>
+              </div>
+            </div>
+          </GlassCard>
+        ) : (
+          <GlassCard className="p-5">
+            <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+              <p className="text-xs font-bold uppercase tracking-wider text-[#e94560]">Delivery Progress</p>
+              {(() => {
+                const eta = computeETA(order);
+                if (!eta) return null;
+                const isToday = eta === 'Arriving today';
+                const overdue = eta.startsWith('Arrival overdue');
+                return (
+                  <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${
+                    overdue
+                      ? 'bg-red-500/15 text-red-300 border-red-500/30'
+                      : isToday
+                        ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                        : 'bg-blue-500/15 text-blue-300 border-blue-500/30'
+                  }`}>
+                    <Truck className="w-3.5 h-3.5" />
+                    {eta}
+                  </span>
+                );
+              })()}
+            </div>
+            <div className="relative flex items-start justify-between">
+              {FLOW_STEPS.map((step, i) => {
+                const currentIdx = flowIndex(order.status);
+                const completed = i < currentIdx;
+                const active = i === currentIdx;
+                const StepIcon = step.icon;
+                const colour = completed
+                  ? 'bg-emerald-500 text-white border-emerald-500'
+                  : active
+                    ? 'bg-[#e94560] text-white border-[#e94560] shadow-lg shadow-[#e94560]/30'
+                    : 'bg-white/5 text-white/40 border-white/10';
+                const lineCompleted = i < currentIdx;
+                return (
+                  <div key={step.key} className="flex-1 flex flex-col items-center relative min-w-0">
+                    {i < FLOW_STEPS.length - 1 && (
+                      <div
+                        aria-hidden
+                        className={`absolute top-5 left-1/2 right-0 h-0.5 -z-0 ${lineCompleted ? 'bg-emerald-500' : 'bg-white/10'}`}
+                        style={{ width: '100%' }}
+                      />
+                    )}
+                    <div className={`relative z-10 w-10 h-10 rounded-full border-2 flex items-center justify-center ${colour}`}>
+                      <StepIcon className="w-4 h-4" />
+                    </div>
+                    <p className={`mt-2 text-[11px] font-semibold text-center ${active ? 'text-white' : completed ? 'text-emerald-300' : 'text-white/40'}`}>
+                      {step.label}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+            {order.status === 'shipped' || order.status === 'out_for_delivery' ? (
+              <p className="mt-4 text-[11px] text-white/50 flex items-center gap-1.5">
+                <Phone className="w-3 h-3 text-[#e94560]" />
+                Our delivery partner will call you on{' '}
+                <span className="text-white font-mono">{order.shipping_address?.phone || SUPPORT.phone}</span>{' '}
+                before arriving.
+              </p>
+            ) : null}
+          </GlassCard>
+        )}
 
         {/* Tracking strip */}
         {ship && (
@@ -225,7 +386,50 @@ export default function OrderDetailPage() {
             )}
           </GlassCard>
         </div>
-      </div>
+
+        {/* Need help block — always visible so the customer has somewhere
+            to go if the automated tracker is ambiguous. */}
+        <GlassCard className="p-5 bg-white/[0.02]">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="p-2 rounded-xl bg-[#e94560]/10 border border-[#e94560]/20">
+              <LifeBuoy className="w-4 h-4 text-[#e94560]" />
+            </div>
+            <h3 className="text-white font-semibold text-sm">Need help with this order?</h3>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+            <a
+              href={`tel:${SUPPORT.phoneDigits}`}
+              className="flex items-center gap-3 p-3 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition-colors"
+            >
+              <Phone className="w-4 h-4 text-[#e94560]" />
+              <div>
+                <p className="text-xs text-white/50">Call us</p>
+                <p className="text-sm font-semibold text-white">{SUPPORT.phone}</p>
+              </div>
+            </a>
+            <a
+              href={`mailto:${SUPPORT.email}`}
+              className="flex items-center gap-3 p-3 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition-colors"
+            >
+              <ShoppingBag className="w-4 h-4 text-[#e94560]" />
+              <div>
+                <p className="text-xs text-white/50">Email support</p>
+                <p className="text-sm font-semibold text-white">{SUPPORT.email}</p>
+              </div>
+            </a>
+          </div>
+          <p className="text-[11px] text-white/40 mt-3">
+            We usually respond within a business day. Support hours: {SUPPORT.hours}.
+          </p>
+        </GlassCard>
+    </div>
+  );
+}
+
+export default function OrderDetailPage() {
+  return (
+    <PublicLayout>
+      <OrderDetailContent backPath="/orders" />
     </PublicLayout>
   );
 }

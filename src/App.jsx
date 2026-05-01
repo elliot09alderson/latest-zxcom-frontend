@@ -8,6 +8,8 @@ import ProtectedRoute from './components/auth/ProtectedRoute';
 import HomePage from './pages/HomePage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
+import MemberLoginPage from './pages/MemberLoginPage';
+import MemberRegisterPage from './pages/MemberRegisterPage';
 import ScanPage from './pages/ScanPage';
 import NotFound from './pages/NotFound';
 import ProductPage from './pages/ProductPage';
@@ -37,6 +39,8 @@ import PromoterIdCard from './pages/promoter/PromoterIdCard';
 import PromoterQRCodes from './pages/promoter/PromoterQRCodes';
 import PromoterNetwork from './pages/promoter/PromoterNetwork';
 import PromoterEarnings from './pages/promoter/PromoterEarnings';
+import PromoterOrders from './pages/promoter/PromoterOrders';
+import PromoterOrderDetail from './pages/promoter/PromoterOrderDetail';
 import OnboardMerchant from './pages/promoter/OnboardMerchant';
 import OnboardPromoter from './pages/promoter/OnboardPromoter';
 
@@ -45,6 +49,7 @@ import AdminDashboard from './pages/admin/AdminDashboard';
 import AdminOffers from './pages/admin/AdminOffers';
 import AdminConfig from './pages/admin/AdminConfig';
 import AdminPromoters from './pages/admin/AdminPromoters';
+import AdminAreaManagers from './pages/admin/AdminAreaManagers';
 import AdminMerchants from './pages/admin/AdminMerchants';
 import AdminContests from './pages/admin/AdminContests';
 import AdminWinners from './pages/admin/AdminWinners';
@@ -55,6 +60,7 @@ import AdminPayments from './pages/admin/AdminPayments';
 import AdminPayouts from './pages/admin/AdminPayouts';
 import AdminProducts from './pages/admin/AdminProducts';
 import AdminOrders from './pages/admin/AdminOrders';
+import AdminSubscriptions from './pages/admin/AdminSubscriptions';
 
 function App() {
   const { user } = useAuth();
@@ -87,6 +93,8 @@ function App() {
       <Route path="/" element={<HomePage />} />
       <Route path="/login" element={user ? <Navigate to={getDashboardRedirect()} /> : <LoginPage />} />
       <Route path="/register" element={<RegisterRoute />} />
+      <Route path="/member/login" element={user ? <Navigate to={getDashboardRedirect()} /> : <MemberLoginPage />} />
+      <Route path="/member/register" element={user ? <Navigate to={getDashboardRedirect()} /> : <MemberRegisterPage />} />
       <Route path="/scan/:qrCodeId" element={<ScanPage />} />
       <Route path="/product/:id" element={<ProductPage />} />
       <Route path="/checkout" element={<CheckoutPage />} />
@@ -117,12 +125,15 @@ function App() {
       <Route path="/promoter/qr-codes" element={<ProtectedRoute roles={['promoter', 'area_manager']}><PromoterQRCodes /></ProtectedRoute>} />
       <Route path="/promoter/network" element={<ProtectedRoute roles={['promoter', 'area_manager']}><PromoterNetwork /></ProtectedRoute>} />
       <Route path="/promoter/earnings" element={<ProtectedRoute roles={['promoter', 'area_manager']}><PromoterEarnings /></ProtectedRoute>} />
+      <Route path="/promoter/orders" element={<ProtectedRoute roles={['promoter', 'area_manager']}><PromoterOrders /></ProtectedRoute>} />
+      <Route path="/promoter/orders/:id" element={<ProtectedRoute roles={['promoter', 'area_manager']}><PromoterOrderDetail /></ProtectedRoute>} />
 
       {/* Admin routes */}
       <Route path="/admin" element={<ProtectedRoute roles={['admin']}><AdminDashboard /></ProtectedRoute>} />
       <Route path="/admin/offers" element={<ProtectedRoute roles={['admin']}><AdminOffers /></ProtectedRoute>} />
       <Route path="/admin/config" element={<ProtectedRoute roles={['admin']}><AdminConfig /></ProtectedRoute>} />
       <Route path="/admin/promoters" element={<ProtectedRoute roles={['admin']}><AdminPromoters /></ProtectedRoute>} />
+      <Route path="/admin/area-managers" element={<ProtectedRoute roles={['admin']}><AdminAreaManagers /></ProtectedRoute>} />
       <Route path="/admin/merchants" element={<ProtectedRoute roles={['admin']}><AdminMerchants /></ProtectedRoute>} />
       <Route path="/admin/contests" element={<ProtectedRoute roles={['admin']}><AdminContests /></ProtectedRoute>} />
       <Route path="/admin/winners" element={<ProtectedRoute roles={['admin']}><AdminWinners /></ProtectedRoute>} />
@@ -132,6 +143,7 @@ function App() {
       <Route path="/admin/packs" element={<ProtectedRoute roles={['admin']}><AdminPacks /></ProtectedRoute>} />
       <Route path="/admin/products" element={<ProtectedRoute roles={['admin']}><AdminProducts /></ProtectedRoute>} />
       <Route path="/admin/orders" element={<ProtectedRoute roles={['admin']}><AdminOrders /></ProtectedRoute>} />
+      <Route path="/admin/subscriptions" element={<ProtectedRoute roles={['admin']}><AdminSubscriptions /></ProtectedRoute>} />
       <Route path="/admin/leaderboard" element={<ProtectedRoute roles={['admin']}><AdminLeaderboard /></ProtectedRoute>} />
 
       {/* Dashboard redirect */}

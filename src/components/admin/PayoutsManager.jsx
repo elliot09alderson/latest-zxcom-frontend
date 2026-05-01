@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import {
   BanknoteArrowUp, CheckCircle2, XCircle, Clock, Store, User, RotateCcw,
-  Wallet, AlertTriangle,
+  Wallet, AlertTriangle, Zap, Send, Landmark, Download,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../config/api';
@@ -27,12 +27,39 @@ export default function PayoutsManager() {
   const [partyFilter, setPartyFilter] = useState('all'); // 'all' | 'merchant' | 'promoter'
   const [requestTab, setRequestTab] = useState('pending');
 
-  // Resolve payout modal state
+  // Resolve payout modal state. resolveAction:
+  //   'approve_razorpayx' | 'approve_manual' | 'mark_paid' | 'reject'
   const [resolveTarget, setResolveTarget] = useState(null);
-  const [resolveMode, setResolveMode] = useState('paid');
+  const [resolveAction, setResolveAction] = useState('mark_paid');
   const [paymentRef, setPaymentRef] = useState('');
   const [note, setNote] = useState('');
   const [resolving, setResolving] = useState(false);
+
+  const razorpayxConfigured = !!data?.razorpayx_configured;
+  const [receiptDownloadingId, setReceiptDownloadingId] = useState(null);
+
+  const handleDownloadReceipt = async (row) => {
+    setReceiptDownloadingId(row._id);
+    try {
+      const res = await api.get(
+        `/admin/payouts/${row.party_type}/${row.party_id}/${row._id}/receipt`,
+        { responseType: 'blob' }
+      );
+      const blob = new Blob([res.data], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `zxcom-payout-receipt.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to download receipt');
+    } finally {
+      setReceiptDownloadingId(null);
+    }
+  };
 
   // Reset credit modal state
   const [resetTarget, setResetTarget] = useState(null);
@@ -43,9 +70,9 @@ export default function PayoutsManager() {
   const credits = (data?.credits || []).filter((c) => partyFilter === 'all' || c.party_type === partyFilter);
   const allPayouts = data?.payouts || [];
 
-  const pending = allPayouts.filter((p) => p.status === 'pending' || p.status === 'approved');
+  const pending = allPayouts.filter((p) => p.status === 'pending' || p.status === 'approved' || p.status === 'processing');
   const paid = allPayouts.filter((p) => p.status === 'paid');
-  const rejected = allPayouts.filter((p) => p.status === 'rejected');
+  const rejected = allPayouts.filter((p) => p.status === 'rejected' || p.status === 'failed' || p.status === 'reversed');
   const filteredPayouts = { pending, paid, rejected }[requestTab] || [];
 
   // Totals for the header
@@ -54,26 +81,44 @@ export default function PayoutsManager() {
   const totalMerchants = credits.filter((c) => c.party_type === 'merchant').length;
   const totalPromoters = credits.filter((c) => c.party_type === 'promoter').length;
 
-  const openResolve = (row, mode) => {
+  const openResolve = (row, action) => {
     setResolveTarget(row);
-    setResolveMode(mode);
+    setResolveAction(action);
     setPaymentRef('');
     setNote('');
   };
 
   const handleResolve = async () => {
     if (!resolveTarget) return;
-    if (resolveMode === 'paid' && !paymentRef.trim()) {
+    if (resolveAction === 'mark_paid' && !paymentRef.trim()) {
       toast.error('Payment reference is required when marking as paid');
       return;
     }
+    if (resolveAction === 'approve_razorpayx' && !resolveTarget.beneficiary?.has_beneficiary) {
+      toast.error('This party has not added their bank/UPI yet');
+      return;
+    }
+
+    let body;
+    if (resolveAction === 'approve_razorpayx') body = { action: 'approve', method: 'razorpayx', note };
+    else if (resolveAction === 'approve_manual') body = { action: 'approve', method: 'manual', note };
+    else if (resolveAction === 'mark_paid') body = { action: 'mark_paid', payment_ref: paymentRef, note };
+    else if (resolveAction === 'reject') body = { action: 'reject', note };
+    else { toast.error('Unknown action'); return; }
+
     setResolving(true);
     try {
       await api.put(
         `/admin/payouts/${resolveTarget.party_type}/${resolveTarget.party_id}/${resolveTarget._id}`,
-        { status: resolveMode, payment_ref: paymentRef, note }
+        body
       );
-      toast.success(`Payout ${resolveMode}`);
+      const successMsg = {
+        approve_razorpayx: 'Sent to RazorpayX',
+        approve_manual: 'Approved — transfer manually then click Mark Paid',
+        mark_paid: 'Payout marked paid',
+        reject: 'Payout rejected',
+      }[resolveAction];
+      toast.success(successMsg);
       setResolveTarget(null);
       refetch();
     } catch (err) {
@@ -186,12 +231,41 @@ export default function PayoutsManager() {
     { key: 'owner_name', label: 'Owner' },
     { key: 'owner_phone', label: 'Phone' },
     {
-      key: 'amount', label: 'Amount',
-      render: (val) => <span className="font-semibold text-white">₹{val}</span>,
+      key: 'amount', label: 'Gross',
+      render: (val, row) => (
+        <div>
+          <p className="font-semibold text-white">₹{Number(val).toFixed(2)}</p>
+          {(row.tds_amount > 0 || row.gateway_fee_amount > 0) && (
+            <p className="text-[9px] text-white/40">
+              {row.tds_amount > 0 ? `TDS −₹${Number(row.tds_amount).toFixed(2)}` : ''}
+              {row.tds_amount > 0 && row.gateway_fee_amount > 0 ? ' · ' : ''}
+              {row.gateway_fee_amount > 0 ? `Fee −₹${Number(row.gateway_fee_amount).toFixed(2)}` : ''}
+            </p>
+          )}
+          {row.net_amount > 0 && (
+            <p className="text-[10px] text-emerald-300 font-mono">net ₹{Number(row.net_amount).toFixed(2)}</p>
+          )}
+        </div>
+      ),
     },
     {
-      key: 'wallet_balance', label: 'Wallet Balance',
-      render: (val) => <span className="text-white/60">₹{val?.toFixed(2) || '0.00'}</span>,
+      key: 'beneficiary', label: 'Beneficiary',
+      render: (val) => {
+        if (!val?.has_beneficiary) {
+          return <span className="text-[10px] text-amber-300">No bank/UPI</span>;
+        }
+        return (
+          <div className="text-[10px] leading-tight">
+            <p className="text-white/80 truncate max-w-[140px]">{val.account_holder}</p>
+            {val.account_number_masked && (
+              <p className="text-white/40 font-mono">{val.account_number_masked}</p>
+            )}
+            {val.upi_vpa && (
+              <p className="text-white/40 font-mono truncate max-w-[140px]">{val.upi_vpa}</p>
+            )}
+          </div>
+        );
+      },
     },
     {
       key: 'requested_at', label: 'Requested',
@@ -199,34 +273,86 @@ export default function PayoutsManager() {
     },
     {
       key: 'status', label: 'Status',
-      render: (val) => (
-        <Badge
-          text={val}
-          variant={val === 'paid' ? 'success' : val === 'rejected' ? 'danger' : 'warning'}
-        />
-      ),
+      render: (val, row) => {
+        const variant =
+          val === 'paid' ? 'success'
+          : (val === 'rejected' || val === 'failed' || val === 'reversed') ? 'danger'
+          : 'warning';
+        return (
+          <div className="flex flex-col gap-0.5">
+            <Badge text={val} variant={variant} />
+            {row.payout_method && (val === 'processing' || val === 'paid' || val === 'failed' || val === 'reversed') && (
+              <span className="text-[9px] text-white/40 uppercase tracking-wider">via {row.payout_method}</span>
+            )}
+          </div>
+        );
+      },
     },
     {
       key: 'actions', label: 'Actions', exportable: false,
       render: (_, row) => {
-        if (row.status === 'pending' || row.status === 'approved') {
+        if (row.status === 'pending') {
           return (
             <div className="flex items-center gap-1">
               <button
-                onClick={() => openResolve(row, 'paid')}
-                className="p-1.5 rounded-lg text-white/50 hover:text-emerald-400 hover:bg-emerald-400/10 transition-all cursor-pointer"
-                title="Mark as Paid"
+                onClick={() => openResolve(row, 'approve_razorpayx')}
+                className="p-1.5 rounded-lg text-white/50 hover:text-blue-400 hover:bg-blue-400/10 transition-all cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                title={razorpayxConfigured ? 'Approve & disburse via RazorpayX' : 'RazorpayX not configured'}
+                disabled={!razorpayxConfigured}
               >
-                <CheckCircle2 className="w-4 h-4" />
+                <Zap className="w-4 h-4" />
               </button>
               <button
-                onClick={() => openResolve(row, 'rejected')}
+                onClick={() => openResolve(row, 'approve_manual')}
+                className="p-1.5 rounded-lg text-white/50 hover:text-amber-400 hover:bg-amber-400/10 transition-all cursor-pointer"
+                title="Approve — I'll transfer manually"
+              >
+                <Landmark className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => openResolve(row, 'reject')}
                 className="p-1.5 rounded-lg text-white/50 hover:text-red-400 hover:bg-red-400/10 transition-all cursor-pointer"
                 title="Reject"
               >
                 <XCircle className="w-4 h-4" />
               </button>
             </div>
+          );
+        }
+        if (row.status === 'approved') {
+          return (
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => openResolve(row, 'mark_paid')}
+                className="p-1.5 rounded-lg text-white/50 hover:text-emerald-400 hover:bg-emerald-400/10 transition-all cursor-pointer"
+                title="Mark as Paid (after manual transfer)"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => openResolve(row, 'reject')}
+                className="p-1.5 rounded-lg text-white/50 hover:text-red-400 hover:bg-red-400/10 transition-all cursor-pointer"
+                title="Reject"
+              >
+                <XCircle className="w-4 h-4" />
+              </button>
+            </div>
+          );
+        }
+        if (row.status === 'processing') {
+          return <span className="text-[10px] text-blue-300">awaiting webhook</span>;
+        }
+        if (row.status === 'paid') {
+          return (
+            <button
+              onClick={() => handleDownloadReceipt(row)}
+              disabled={receiptDownloadingId === row._id}
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-white/5 hover:bg-white/10 border border-white/10 text-[10px] text-white/70 hover:text-white transition-all cursor-pointer disabled:opacity-50 disabled:cursor-wait"
+              title="Download payment receipt"
+            >
+              <Download className="w-3 h-3" />
+              {receiptDownloadingId === row._id ? '…' : 'Receipt'}
+            </button>
           );
         }
         if (row.payment_ref) {
@@ -259,8 +385,18 @@ export default function PayoutsManager() {
         </div>
       </div>
 
+      {!razorpayxConfigured && (
+        <div className="mb-4 flex items-start gap-2 bg-amber-500/10 border border-amber-500/20 rounded-lg p-3">
+          <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
+          <div className="text-[11px] text-amber-200/90 leading-relaxed">
+            <p><strong>RazorpayX is not configured</strong> — the auto-disburse button is disabled.</p>
+            <p className="text-amber-200/70 mt-0.5">You can still approve manually and click Mark Paid after transferring via your own netbanking. To enable RazorpayX, set <code className="text-amber-300">RAZORPAYX_KEY_ID</code>, <code className="text-amber-300">RAZORPAYX_KEY_SECRET</code>, <code className="text-amber-300">RAZORPAYX_ACCOUNT_NUMBER</code> in <code className="text-amber-300">backend/.env</code>.</p>
+          </div>
+        </div>
+      )}
+
       {/* Summary strip */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
         <div className="bg-white/5 border border-white/10 rounded-xl p-3">
           <p className="text-[10px] text-white/30 uppercase tracking-wider mb-1">Outstanding</p>
           <p className="text-xl font-bold text-emerald-300">₹{totalOutstanding.toFixed(2)}</p>
@@ -269,6 +405,26 @@ export default function PayoutsManager() {
           <p className="text-[10px] text-white/30 uppercase tracking-wider mb-1">Pending Requests</p>
           <p className="text-xl font-bold text-amber-300">{pending.length}</p>
         </div>
+
+        {/* TDS — only show if any has been deducted, otherwise the strip
+             reads as empty noise on a fresh install. */}
+        {data?.tds && (data.tds.total_deducted_all_time > 0 || data.tds.total_pending > 0) && (
+          <div className="bg-red-500/5 border border-red-500/30 rounded-xl p-3" title={`Section 194H · ${data.tds.fy_label}`}>
+            <div className="flex items-center gap-1.5 mb-1">
+              <BanknoteArrowUp className="w-3 h-3 text-red-300 rotate-180" />
+              <p className="text-[10px] text-red-200/80 uppercase tracking-wider">Total TDS Deducted</p>
+            </div>
+            <p className="text-xl font-bold text-red-200">₹{Number(data.tds.total_deducted_all_time).toFixed(2)}</p>
+            <div className="text-[10px] text-white/40 mt-1 leading-tight">
+              <p>{data.tds.fy_label}: <span className="text-red-200/90 font-mono">₹{Number(data.tds.total_deducted_fy).toFixed(2)}</span></p>
+              {data.tds.total_pending > 0 && (
+                <p>Pending: <span className="text-amber-200/90 font-mono">₹{Number(data.tds.total_pending).toFixed(2)}</span></p>
+              )}
+              <p className="text-white/30">{data.tds.paid_count} paid · {data.tds.paid_count_fy} this FY</p>
+            </div>
+          </div>
+        )}
+
         <div className="bg-white/5 border border-white/10 rounded-xl p-3">
           <div className="flex items-center gap-1.5 mb-1">
             <Store className="w-3 h-3 text-blue-400" />
@@ -393,7 +549,12 @@ export default function PayoutsManager() {
       <Modal
         isOpen={!!resolveTarget}
         onClose={() => setResolveTarget(null)}
-        title={resolveMode === 'paid' ? 'Mark Payout as Paid' : 'Reject Payout'}
+        title={
+          resolveAction === 'approve_razorpayx' ? 'Approve via RazorpayX' :
+          resolveAction === 'approve_manual'    ? 'Approve (Manual Transfer)' :
+          resolveAction === 'mark_paid'         ? 'Mark Payout as Paid' :
+                                                  'Reject Payout'
+        }
         size="md"
       >
         {resolveTarget && (
@@ -420,8 +581,93 @@ export default function PayoutsManager() {
               </div>
             </div>
 
-            {resolveMode === 'paid' && (
+            {/* Beneficiary block — visible for all actions except plain reject */}
+            {resolveAction !== 'reject' && resolveTarget.beneficiary && (
+              <div className="bg-white/5 rounded-xl p-3 border border-white/5">
+                <p className="text-[10px] text-white/40 uppercase tracking-wider mb-1.5">Send to</p>
+                {resolveTarget.beneficiary.has_beneficiary ? (
+                  <div className="text-xs space-y-0.5">
+                    <p className="text-white font-medium">{resolveTarget.beneficiary.account_holder}</p>
+                    {resolveTarget.beneficiary.account_number_masked && (
+                      <p className="text-white/60 font-mono">
+                        {resolveTarget.beneficiary.account_number_masked} · {resolveTarget.beneficiary.ifsc}
+                      </p>
+                    )}
+                    {resolveTarget.beneficiary.upi_vpa && (
+                      <p className="text-white/60 font-mono">{resolveTarget.beneficiary.upi_vpa}</p>
+                    )}
+                    {resolveTarget.beneficiary.pan_masked && (
+                      <p className="text-white/40 text-[10px]">PAN: {resolveTarget.beneficiary.pan_masked}</p>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-xs text-amber-300">No bank / UPI on file — party must add beneficiary first.</p>
+                )}
+              </div>
+            )}
+
+            {(resolveAction === 'approve_razorpayx' || resolveAction === 'approve_manual') && (
+              <div className="bg-amber-500/5 border border-amber-500/20 rounded-lg p-3 text-[11px] space-y-1.5">
+                <p className="text-amber-200/80 uppercase tracking-wider text-[10px] font-semibold">Deductions on approval</p>
+                <p className="text-white/50 text-[10px] -mt-1">Computed precisely at approval time. Wallet will be debited the gross amount; TDS retained for govt deposit.</p>
+                <div className="flex justify-between text-white/70">
+                  <span>Gross requested</span>
+                  <span className="font-mono">₹{Number(resolveTarget.amount).toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-white/70">
+                  <span>TDS @ 2% (or 20% if no PAN) · Section 194H</span>
+                  <span className="font-mono text-red-300">computed on approve</span>
+                </div>
+                <div className="flex justify-between text-white/70">
+                  <span>Gateway fee ({resolveAction === 'approve_razorpayx' ? 'RazorpayX' : 'Manual'})</span>
+                  <span className="font-mono text-red-300">per config</span>
+                </div>
+                <p className="text-[10px] text-white/40 pt-1">
+                  The exact net amount will be stamped on the payout record once you confirm.
+                </p>
+              </div>
+            )}
+            {resolveAction === 'approve_razorpayx' && (
+              <p className="text-[11px] text-blue-300/80 bg-blue-500/10 border border-blue-500/20 rounded-lg p-2.5">
+                ⚡ RazorpayX will disburse the <strong>net</strong> amount to the beneficiary above.
+                Status moves to <strong>processing</strong>; the webhook will flip it to
+                <strong>paid</strong> or <strong>failed</strong> when the bank confirms.
+              </p>
+            )}
+            {resolveAction === 'approve_manual' && (
+              <p className="text-[11px] text-amber-300/80 bg-amber-500/10 border border-amber-500/20 rounded-lg p-2.5">
+                After approval, transfer the <strong>net</strong> amount via your own netbanking/UPI
+                to the beneficiary above, then click <strong>Mark Paid</strong> with the bank reference.
+                Wallet is debited (full gross) only on Mark Paid.
+              </p>
+            )}
+            {resolveAction === 'mark_paid' && (
               <>
+                {(resolveTarget.tds_amount > 0 || resolveTarget.gateway_fee_amount > 0 || resolveTarget.net_amount > 0) && (
+                  <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-lg p-3 text-[11px] space-y-1.5">
+                    <p className="text-emerald-200/80 uppercase tracking-wider text-[10px] font-semibold">Transfer this amount</p>
+                    <div className="flex justify-between text-white/70">
+                      <span>Gross (debits from wallet)</span>
+                      <span className="font-mono">₹{Number(resolveTarget.amount).toFixed(2)}</span>
+                    </div>
+                    {resolveTarget.tds_amount > 0 && (
+                      <div className="flex justify-between text-white/70">
+                        <span>TDS @ {resolveTarget.tds_rate_applied}% (retained for {resolveTarget.tds_section || '194H'})</span>
+                        <span className="font-mono text-red-300">−₹{Number(resolveTarget.tds_amount).toFixed(2)}</span>
+                      </div>
+                    )}
+                    {resolveTarget.gateway_fee_amount > 0 && (
+                      <div className="flex justify-between text-white/70">
+                        <span>Gateway fee (retained)</span>
+                        <span className="font-mono text-red-300">−₹{Number(resolveTarget.gateway_fee_amount).toFixed(2)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between pt-1.5 border-t border-emerald-500/15">
+                      <span className="text-white font-semibold">Send to beneficiary</span>
+                      <span className="font-mono font-bold text-emerald-300">₹{Number(resolveTarget.net_amount).toFixed(2)}</span>
+                    </div>
+                  </div>
+                )}
                 <Input
                   label="Payment Reference (UPI txn / IMPS / cheque no.)"
                   value={paymentRef}
@@ -430,8 +676,8 @@ export default function PayoutsManager() {
                   required
                 />
                 <p className="text-[11px] text-amber-300/80 bg-amber-500/10 border border-amber-500/20 rounded-lg p-2.5">
-                  ⚠ Marking as paid will debit ₹{resolveTarget.amount} from the wallet balance.
-                  Make sure the bank transfer has actually been sent before confirming.
+                  ⚠ Marking as paid will debit ₹{Number(resolveTarget.amount).toFixed(2)} (gross)
+                  from the wallet balance. Make sure you've already sent ₹{Number(resolveTarget.net_amount || resolveTarget.amount).toFixed(2)} to the beneficiary.
                 </p>
               </>
             )}
@@ -439,7 +685,7 @@ export default function PayoutsManager() {
               label="Note (optional)"
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              placeholder={resolveMode === 'paid' ? 'e.g. Transferred on 1 May' : 'Reason for rejection'}
+              placeholder={resolveAction === 'reject' ? 'Reason for rejection' : 'Optional internal note'}
             />
 
             <div className="flex justify-end gap-2 pt-2">
@@ -447,9 +693,12 @@ export default function PayoutsManager() {
               <Button
                 loading={resolving}
                 onClick={handleResolve}
-                variant={resolveMode === 'paid' ? 'primary' : 'secondary'}
+                variant={resolveAction === 'reject' ? 'secondary' : 'primary'}
               >
-                {resolveMode === 'paid' ? 'Confirm Paid' : 'Confirm Reject'}
+                {resolveAction === 'approve_razorpayx' ? 'Send via RazorpayX' :
+                 resolveAction === 'approve_manual'    ? 'Approve' :
+                 resolveAction === 'mark_paid'         ? 'Confirm Paid' :
+                                                         'Confirm Reject'}
               </Button>
             </div>
           </div>

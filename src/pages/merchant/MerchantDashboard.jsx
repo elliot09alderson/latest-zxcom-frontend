@@ -8,6 +8,7 @@ import SubmissionCounter from '../../components/merchant/SubmissionCounter';
 import CustomerList from '../../components/merchant/CustomerList';
 import MerchantWinners from '../../components/merchant/MerchantWinners';
 import SubscriptionCard from '../../components/merchant/SubscriptionCard';
+import SubscriptionBillsCard from '../../components/merchant/SubscriptionBillsCard';
 import WalletCard from '../../components/merchant/WalletCard';
 import DashboardBanners from '../../components/ui/DashboardBanners';
 
@@ -43,6 +44,7 @@ export default function MerchantDashboard() {
               status={stats.status}
               onRenewed={refetch}
             />
+            <SubscriptionBillsCard />
             <WalletCard />
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <StatsCard

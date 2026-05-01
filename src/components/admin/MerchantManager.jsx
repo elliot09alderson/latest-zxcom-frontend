@@ -62,6 +62,31 @@ export default function MerchantManager() {
   const [bulkSubmissionCredits, setBulkSubmissionCredits] = useState('');
   const [bulkSubmitting, setBulkSubmitting] = useState(false);
 
+  const [downloadingBillId, setDownloadingBillId] = useState(null);
+
+  const handleDownloadBill = async (merchantId, entry) => {
+    setDownloadingBillId(entry._id);
+    try {
+      const res = await api.get(`/admin/merchants/${merchantId}/subscription-bill/${entry._id}`, {
+        responseType: 'blob',
+      });
+      const blob = new Blob([res.data], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      const dateStr = entry.paid_at ? new Date(entry.paid_at).toISOString().slice(0, 10) : 'bill';
+      link.download = `zxcom-bill-${dateStr}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to download bill');
+    } finally {
+      setDownloadingBillId(null);
+    }
+  };
+
   const merchants = (data?.merchants || []).map((m) => {
     const days = daysFromNow(m.plan_end_date);
     const isExpired = days !== null && days <= 0;
@@ -246,21 +271,30 @@ export default function MerchantManager() {
     } finally { setChangingPassword(false); }
   };
 
-  const handleDownloadQR = async (m) => {
-    const imgUrl = fullUrl(m.qr_image_url);
-    if (!imgUrl) { toast.error('QR not available'); return; }
+  // Download the FULL styled QR card (PDF) — not the bare QR image.
+  // Server renders via Puppeteer using the same template merchants see
+  // in their dashboard PlanInfo "Print" preview.
+  const [downloadingCardId, setDownloadingCardId] = useState(null);
+  const handleDownloadCard = async (m) => {
+    if (!m._id) { toast.error('Merchant id missing'); return; }
+    setDownloadingCardId(m._id);
     try {
-      const resp = await fetch(imgUrl);
-      const blob = await resp.blob();
-      const blobUrl = URL.createObjectURL(blob);
+      const res = await api.get(`/admin/merchants/${m._id}/qr-card`, { responseType: 'blob' });
+      const blob = new Blob([res.data], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
-      link.href = blobUrl;
-      link.download = `qr-${m.shop_name || m.qr_code}.png`;
+      link.href = url;
+      const slug = (m.shop_name || 'merchant').replace(/[^a-z0-9]+/gi, '-').toLowerCase();
+      link.download = `zxcom-card-${slug}.pdf`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      URL.revokeObjectURL(blobUrl);
-    } catch { toast.error('Download failed'); }
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to download card');
+    } finally {
+      setDownloadingCardId(null);
+    }
   };
 
   const handlePrintQR = (m) => {
@@ -518,6 +552,7 @@ export default function MerchantManager() {
                         <th className="py-2 font-medium">Period</th>
                         <th className="py-2 font-medium">Mode</th>
                         <th className="py-2 font-medium">Reference</th>
+                        <th className="py-2 font-medium text-right">Bill</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -537,6 +572,17 @@ export default function MerchantManager() {
                           </td>
                           <td className="py-2 text-white/50 font-mono text-[10px] truncate max-w-[140px]" title={r.razorpay_payment_id || r.note}>
                             {r.razorpay_payment_id || r.note || '—'}
+                          </td>
+                          <td className="py-2 text-right">
+                            <button
+                              onClick={() => handleDownloadBill(m._id, r)}
+                              disabled={downloadingBillId === r._id}
+                              className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-white/5 hover:bg-white/10 border border-white/10 text-[10px] text-white/70 hover:text-white transition-all cursor-pointer disabled:opacity-50 disabled:cursor-wait"
+                              title="Download tax invoice"
+                            >
+                              <Download className="w-3 h-3" />
+                              {downloadingBillId === r._id ? '…' : 'PDF'}
+                            </button>
                           </td>
                         </tr>
                       ))}
@@ -604,7 +650,15 @@ export default function MerchantManager() {
                   <div className="flex-1 space-y-2 text-center sm:text-left">
                     <p className="text-sm font-mono text-[#e94560]">{m.qr_code}</p>
                     <div className="flex gap-2 justify-center sm:justify-start">
-                      <Button variant="secondary" size="sm" icon={Download} onClick={() => handleDownloadQR(m)}>Download</Button>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        icon={Download}
+                        onClick={() => handleDownloadCard(m)}
+                        loading={downloadingCardId === m._id}
+                      >
+                        Download Card
+                      </Button>
                       <Button variant="secondary" size="sm" icon={Printer} onClick={() => handlePrintQR(m)}>Print</Button>
                     </div>
                   </div>

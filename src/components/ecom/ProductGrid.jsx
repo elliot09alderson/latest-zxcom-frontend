@@ -1,8 +1,9 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import ProductCard from './ProductCard';
 import FilterSheet from './FilterSheet';
-import allProducts from '../../data/products';
+import { fetchProducts } from '../../data/products';
+import Spinner from '../ui/Spinner';
 
 const containerVariants = {
   hidden: {},
@@ -17,6 +18,17 @@ const itemVariants = {
 export default function ProductGrid({ activeCategory, searchQuery }) {
   const [filters, setFilters] = useState({});
   const [sortBy, setSortBy] = useState('relevance');
+  const [allProducts, setAllProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      const list = await fetchProducts();
+      setAllProducts(list);
+      setLoading(false);
+    })();
+  }, []);
 
   const filteredProducts = useMemo(() => {
     let products = [...allProducts];
@@ -62,7 +74,7 @@ export default function ProductGrid({ activeCategory, searchQuery }) {
     }
 
     return products;
-  }, [activeCategory, searchQuery, filters, sortBy]);
+  }, [activeCategory, searchQuery, filters, sortBy, allProducts]);
 
   return (
     <div className="flex gap-8">
@@ -77,7 +89,11 @@ export default function ProductGrid({ activeCategory, searchQuery }) {
           </p>
         </div>
 
-        {filteredProducts.length === 0 ? (
+        {loading ? (
+          <div className="flex items-center justify-center py-20">
+            <Spinner size="lg" />
+          </div>
+        ) : filteredProducts.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <div className="w-20 h-20 rounded-full bg-white/5 flex items-center justify-center mb-4">
               <span className="text-4xl">🔍</span>

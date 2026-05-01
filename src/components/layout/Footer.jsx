@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import Logo from '../ui/Logo';
 
 const policyLinks = [
   { path: '/about', label: 'About Us' },
@@ -16,9 +17,7 @@ export default function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           {/* Brand */}
           <div>
-            <span className="text-xl font-bold bg-gradient-to-r from-[#e94560] to-[#c23616] bg-clip-text text-transparent">
-              ZXCOM
-            </span>
+            <Logo size="md" />
             <p className="text-xs text-white/40 mt-2 max-w-xs">
               Premium t-shirts, signature bags and lifestyle essentials. Free delivery on orders above ₹499.
             </p>

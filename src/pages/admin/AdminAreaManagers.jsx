@@ -1,23 +1,9 @@
 import {
-  LayoutDashboard,
-  Gift,
-  Trophy,
-  Award,
-  Users,
-  Store,
-  Settings,
-  BarChart3,
-  Package,
-  UserCheck,
-  Wallet,
-  ShoppingBag,
-  Truck,
-  Repeat,
-  Crown,
+  LayoutDashboard, Gift, Trophy, Award, Users, Store, Settings, BarChart3, Package,
+  UserCheck, Wallet, BanknoteArrowUp, ShoppingBag, Truck, Repeat, Crown,
 } from 'lucide-react';
 import DashboardLayout from '../../components/layout/DashboardLayout';
-import StatsOverview from '../../components/admin/StatsOverview';
-import Leaderboard from '../../components/admin/Leaderboard';
+import AreaManagerRequestsManager from '../../components/admin/AreaManagerRequestsManager';
 
 const sidebarLinks = [
   { path: '/admin', label: 'Dashboard', icon: <LayoutDashboard size={18} /> },
@@ -29,7 +15,7 @@ const sidebarLinks = [
   { path: '/admin/merchants', label: 'Merchants', icon: <Store size={18} /> },
   { path: '/admin/customers', label: 'Customers', icon: <UserCheck size={18} /> },
   { path: '/admin/payments', label: 'Payments', icon: <Wallet size={18} /> },
-  { path: '/admin/payouts', label: 'Payouts', icon: <Wallet size={18} /> },
+  { path: '/admin/payouts', label: 'Payouts', icon: <BanknoteArrowUp size={18} /> },
   { path: '/admin/packs', label: 'Packs', icon: <Package size={18} /> },
   { path: '/admin/products', label: 'Products', icon: <ShoppingBag size={18} /> },
   { path: '/admin/orders', label: 'Orders', icon: <Truck size={18} /> },
@@ -38,13 +24,10 @@ const sidebarLinks = [
   { path: '/admin/leaderboard', label: 'Leaderboard', icon: <BarChart3 size={18} /> },
 ];
 
-export default function AdminDashboard() {
+export default function AdminAreaManagers() {
   return (
     <DashboardLayout sidebarLinks={sidebarLinks} title="Admin Panel">
-      <div className="space-y-10">
-        <StatsOverview />
-        <Leaderboard />
-      </div>
+      <AreaManagerRequestsManager />
     </DashboardLayout>
   );
 }

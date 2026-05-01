@@ -4,6 +4,8 @@ import {
   LayoutDashboard, Gift, Trophy, Award, Users, Store, Settings, BarChart3,
   Package, UserCheck, Wallet, Plus, Pencil, Trash2, X, IndianRupee,
   ShoppingBag, Truck, Image as ImageIcon, Tag, Upload,
+  Repeat,
+  Crown,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../config/api';
@@ -24,6 +26,7 @@ const sidebarLinks = [
   { path: '/admin/contests', label: 'Contests', icon: <Trophy size={18} /> },
   { path: '/admin/winners', label: 'Winners', icon: <Award size={18} /> },
   { path: '/admin/promoters', label: 'Promoters', icon: <Users size={18} /> },
+  { path: '/admin/area-managers', label: 'Area Managers', icon: <Crown size={18} /> },
   { path: '/admin/merchants', label: 'Merchants', icon: <Store size={18} /> },
   { path: '/admin/customers', label: 'Customers', icon: <UserCheck size={18} /> },
   { path: '/admin/payments', label: 'Payments', icon: <Wallet size={18} /> },
@@ -31,6 +34,7 @@ const sidebarLinks = [
   { path: '/admin/packs', label: 'Packs', icon: <Package size={18} /> },
   { path: '/admin/products', label: 'Products', icon: <ShoppingBag size={18} /> },
   { path: '/admin/orders', label: 'Orders', icon: <Truck size={18} /> },
+  { path: '/admin/subscriptions', label: 'Subscriptions', icon: <Repeat size={18} /> },
   { path: '/admin/config', label: 'Config', icon: <Settings size={18} /> },
   { path: '/admin/leaderboard', label: 'Leaderboard', icon: <BarChart3 size={18} /> },
 ];
@@ -70,6 +74,8 @@ const emptyForm = {
   breadth_cm: '20',
   height_cm: '3',
   hsn_code: '',
+  commission_type: 'percent',
+  commission_value: '',
   status: 'active',
 };
 
@@ -146,6 +152,8 @@ export default function AdminProducts() {
       breadth_cm: String(p.breadth_cm ?? '20'),
       height_cm: String(p.height_cm ?? '3'),
       hsn_code: p.hsn_code || '',
+      commission_type: p.commission_type || 'percent',
+      commission_value: String(p.commission_value ?? ''),
       status: p.status || 'active',
     });
     setShowForm(true);
@@ -226,6 +234,8 @@ export default function AdminProducts() {
       breadth_cm: Number(form.breadth_cm) || 20,
       height_cm: Number(form.height_cm) || 3,
       hsn_code: form.hsn_code,
+      commission_type: form.commission_type === 'flat' ? 'flat' : 'percent',
+      commission_value: Math.max(0, Number(form.commission_value) || 0),
       status: form.status,
     };
 
@@ -503,6 +513,40 @@ export default function AdminProducts() {
                     </div>
                   </div>
 
+                  <div className="border-t border-white/10 pt-4">
+                    <p className="text-xs text-white/50 font-semibold uppercase tracking-wider mb-1">Merchant Commission</p>
+                    <p className="text-[11px] text-white/40 mb-3">
+                      Earned by the merchant whose QR introduced the customer to ZXCOM. Per-unit:
+                      {form.commission_type === 'percent'
+                        ? ` (price × qty × ${form.commission_value || 0}%) ÷ 100`
+                        : ` ₹${form.commission_value || 0} × qty`}.
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <Select
+                        label="Commission Type"
+                        name="commission_type"
+                        value={form.commission_type}
+                        onChange={updateField}
+                        options={[
+                          { value: 'percent', label: '% of price' },
+                          { value: 'flat', label: 'Flat ₹ per unit' },
+                        ]}
+                      />
+                      <Input
+                        label={form.commission_type === 'flat' ? 'Amount (₹)' : 'Percent (%)'}
+                        name="commission_value"
+                        type="number"
+                        step={form.commission_type === 'flat' ? '0.01' : '0.1'}
+                        min="0"
+                        max={form.commission_type === 'percent' ? '100' : undefined}
+                        value={form.commission_value}
+                        onChange={updateField}
+                        icon={form.commission_type === 'flat' ? IndianRupee : undefined}
+                        placeholder={form.commission_type === 'flat' ? 'e.g. 50' : 'e.g. 10'}
+                      />
+                    </div>
+                  </div>
+
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <Select
                       label="Status"
@@ -589,12 +633,28 @@ export default function AdminProducts() {
                           <span className="text-xs text-white/30 line-through">₹{p.original_price}</span>
                         )}
                       </div>
-                      <p className="text-xs text-white/40 mt-1">
-                        Stock: <span className="text-white/70">{totalStock(p)}</span>
-                        {CLOTHING_CATEGORIES.includes(p.category) && p.sizes?.length > 0 && (
-                          <span> ({p.sizes.map((s) => `${s.size}:${s.stock}`).join(', ')})</span>
-                        )}
-                      </p>
+                      {(() => {
+                        const total = totalStock(p);
+                        const pill =
+                          total <= 0
+                            ? 'bg-red-500/15 text-red-300 border-red-500/30'
+                            : total <= 10
+                              ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                              : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30';
+                        const label = total <= 0 ? 'Out of stock' : total <= 10 ? `Low · ${total}` : `${total} in stock`;
+                        return (
+                          <div className="mt-1.5 flex items-center gap-2">
+                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-bold uppercase tracking-wider ${pill}`}>
+                              {label}
+                            </span>
+                            {CLOTHING_CATEGORIES.includes(p.category) && p.sizes?.length > 0 && (
+                              <span className="text-[10px] text-white/40">
+                                {p.sizes.map((s) => `${s.size}:${s.stock}`).join(' · ')}
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
                 </GlassCard>

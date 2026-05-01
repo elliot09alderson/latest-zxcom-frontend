@@ -4,7 +4,9 @@ import {
   LayoutDashboard, Gift, Trophy, Award, Users, Store, Settings, BarChart3,
   Package, UserCheck, Wallet, ShoppingBag, Truck, X, Eye, RefreshCw, Send,
   MapPin, Phone, IndianRupee, ExternalLink, Ban, ShoppingCart, DollarSign,
-  Clock, CheckCircle2, TrendingUp,
+  Clock, CheckCircle2, TrendingUp, Receipt,
+  Repeat,
+  Crown,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../config/api';
@@ -24,6 +26,7 @@ const sidebarLinks = [
   { path: '/admin/contests', label: 'Contests', icon: <Trophy size={18} /> },
   { path: '/admin/winners', label: 'Winners', icon: <Award size={18} /> },
   { path: '/admin/promoters', label: 'Promoters', icon: <Users size={18} /> },
+  { path: '/admin/area-managers', label: 'Area Managers', icon: <Crown size={18} /> },
   { path: '/admin/merchants', label: 'Merchants', icon: <Store size={18} /> },
   { path: '/admin/customers', label: 'Customers', icon: <UserCheck size={18} /> },
   { path: '/admin/payments', label: 'Payments', icon: <Wallet size={18} /> },
@@ -637,12 +640,16 @@ function AnalyticsView({ stats, loading }) {
 
   return (
     <div className="space-y-6">
-      {/* Stat cards */}
+      {/* Stat cards — ecom orders only; subscriptions are on /admin/subscriptions. */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatsCard title="Total Orders" value={totals.total_orders || 0} icon={ShoppingCart} color="#3b82f6" />
         <StatsCard title="Paid Orders" value={totals.paid_count || 0} icon={CheckCircle2} color="#10b981" />
-        <StatsCard title="Revenue" value={rupees(totals.total_revenue)} icon={DollarSign} color="#e94560" />
+        <StatsCard title="Gross Revenue" value={rupees(totals.total_revenue)} icon={DollarSign} color="#e94560" />
         <StatsCard title="Avg Order Value" value={rupees(totals.avg_order_value)} icon={TrendingUp} color="#8b5cf6" />
+        <StatsCard title="GST Collected" value={rupees(totals.gst)} icon={Receipt} color="#f59e0b" />
+        <StatsCard title="Delivery Charges" value={rupees(totals.delivery)} icon={Truck} color="#14b8a6" />
+        <StatsCard title="Subtotal (pre-GST)" value={rupees(totals.subtotal)} icon={Package} color="#6366f1" />
+        <StatsCard title="Net Product Sales" value={rupees(Math.max(0, (totals.subtotal || 0) - (totals.gst || 0)))} icon={TrendingUp} color="#10b981" />
       </div>
 
       {/* Daily charts */}

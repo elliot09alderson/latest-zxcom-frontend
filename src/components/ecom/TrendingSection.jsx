@@ -1,11 +1,23 @@
-import { useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { ChevronLeft, ChevronRight, Star, Zap } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Star, Zap, AlertTriangle } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { trendingProducts } from '../../data/products';
+import { fetchProducts } from '../../data/products';
 
 export default function TrendingSection() {
   const scrollRef = useRef(null);
+  const [trendingProducts, setTrendingProducts] = useState([]);
+
+  useEffect(() => {
+    (async () => {
+      const list = await fetchProducts();
+      // Rank by review count as a rough "trending" proxy.
+      const sorted = [...list].sort((a, b) => (b.reviews || 0) - (a.reviews || 0)).slice(0, 10);
+      setTrendingProducts(sorted);
+    })();
+  }, []);
+
+  if (!trendingProducts.length) return null;
 
   const scroll = (dir) => {
     if (scrollRef.current) {
@@ -39,15 +51,22 @@ export default function TrendingSection() {
               <div className="relative aspect-[3/4] overflow-hidden">
                 <img src={product.image} alt={product.name} className="w-full h-full object-cover" loading="lazy" />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
-                <div className="absolute bottom-2 left-2 flex items-center gap-1 px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-sm">
-                  <Zap className="w-3 h-3 text-yellow-400" />
-                  <span className="text-white text-[10px] font-semibold">{product.orders} orders</span>
-                </div>
-                {product.discount && (
+                {product.isOutOfStock ? (
+                  <div className="absolute top-2 left-2 flex items-center gap-1 px-2 py-0.5 rounded-md bg-red-500 text-white text-[10px] font-bold">
+                    <AlertTriangle className="w-3 h-3" /> Out of Stock
+                  </div>
+                ) : product.discount ? (
                   <div className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-green-500 text-white text-[10px] font-bold">
                     {product.discount}% OFF
                   </div>
-                )}
+                ) : null}
+                {product.reviews ? (
+                  <div className="absolute bottom-2 left-2 flex items-center gap-1 px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-sm">
+                    <Zap className="w-3 h-3 text-yellow-400" />
+                    <span className="text-white text-[10px] font-semibold">{product.reviews} reviews</span>
+                  </div>
+                ) : null}
+                {product.isOutOfStock && <div className="absolute inset-0 bg-black/45" />}
               </div>
               <div className="p-3 space-y-1.5">
                 <h4 className="text-white/80 text-xs font-medium line-clamp-2 leading-tight min-h-[2rem]">{product.name}</h4>

@@ -1,5 +1,10 @@
 import { useState } from 'react';
 
+// Fields where the user should only be able to type digits.
+// `tel` is phone, `number` is any numeric field; callers can also pass
+// `digitsOnly` explicitly for pincode/aadhaar-style fields.
+const DIGIT_TYPES = new Set(['tel', 'number']);
+
 export default function Input({
   label,
   type = 'text',
@@ -12,9 +17,35 @@ export default function Input({
   required = false,
   disabled = false,
   readOnly = false,
+  digitsOnly = false,
+  maxLength,
+  inputMode,
   className = '',
 }) {
   const [focused, setFocused] = useState(false);
+  const isDigitField = digitsOnly || DIGIT_TYPES.has(type);
+
+  // Strip any non-digit characters the user tries to type/paste into a
+  // digit-only field. Still fires the caller's onChange with a cleaned value
+  // so form state never holds garbage.
+  const handleChange = (e) => {
+    if (isDigitField) {
+      const cleaned = e.target.value.replace(/\D+/g, '');
+      if (cleaned !== e.target.value) {
+        e.target.value = cleaned;
+      }
+    }
+    onChange?.(e);
+  };
+
+  // Block non-numeric keystrokes early so the caret doesn't visibly jump.
+  const handleKeyDown = (e) => {
+    if (!isDigitField) return;
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    const allowed = ['Backspace', 'Delete', 'Tab', 'Enter', 'Home', 'End', 'ArrowLeft', 'ArrowRight'];
+    if (allowed.includes(e.key)) return;
+    if (!/^\d$/.test(e.key)) e.preventDefault();
+  };
 
   return (
     <div className={`space-y-1.5 ${className}`}>
@@ -42,10 +73,14 @@ export default function Input({
           type={type}
           placeholder={placeholder}
           value={value}
-          onChange={onChange}
+          onChange={handleChange}
+          onKeyDown={handleKeyDown}
           required={required}
           disabled={disabled}
           readOnly={readOnly}
+          inputMode={inputMode || (isDigitField ? 'numeric' : undefined)}
+          pattern={isDigitField ? '[0-9]*' : undefined}
+          maxLength={maxLength}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
           className={`

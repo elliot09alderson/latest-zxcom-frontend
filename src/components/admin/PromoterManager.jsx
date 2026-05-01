@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Users, Search, CheckCircle, XCircle, Eye, CreditCard, Hash,
   Store, Shield, Copy, Link2, RefreshCw, Zap, Plus, UserPlus, Lock, KeyRound,
-  Crown, ArrowDownToLine,
+  Crown, ArrowDownToLine, Download,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../config/api';
@@ -24,6 +24,30 @@ export default function PromoterManager() {
   const [selectedPromoter, setSelectedPromoter] = useState(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [generatingCode, setGeneratingCode] = useState(false);
+  const [idCardDownloadingId, setIdCardDownloadingId] = useState(null);
+
+  const handleDownloadIdCard = async (row) => {
+    const id = row?._id || row?.id;
+    if (!id) { toast.error('Promoter id missing'); return; }
+    setIdCardDownloadingId(id);
+    try {
+      const res = await api.get(`/admin/promoters/${id}/id-card`, { responseType: 'blob' });
+      const blob = new Blob([res.data], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      const slug = (row.employee_id || id).toString().replace(/[^a-z0-9]+/gi, '-').toLowerCase();
+      link.download = `zxcom-idcard-${slug}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to download ID card');
+    } finally {
+      setIdCardDownloadingId(null);
+    }
+  };
 
   // Recharge state
   const [showRecharge, setShowRecharge] = useState(false);
@@ -292,6 +316,14 @@ export default function PromoterManager() {
             title="View Details"
           >
             <Eye className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => handleDownloadIdCard(row)}
+            disabled={idCardDownloadingId === (row._id || row.id)}
+            className="p-1.5 rounded-lg text-white/50 hover:text-amber-400 hover:bg-amber-400/10 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-wait"
+            title="Download ID Card"
+          >
+            <CreditCard className="w-4 h-4" />
           </button>
           {row.status !== 'active' ? (
             <button
@@ -658,6 +690,19 @@ export default function PromoterManager() {
                   Promote to Area Manager
                 </Button>
               )}
+            </div>
+
+            {/* ID Card download */}
+            <div className="pt-2">
+              <Button
+                fullWidth
+                variant="secondary"
+                icon={Download}
+                loading={idCardDownloadingId === (selectedPromoter._id || selectedPromoter.id)}
+                onClick={() => handleDownloadIdCard(selectedPromoter)}
+              >
+                Download ID Card (PDF)
+              </Button>
             </div>
 
             {/* Action buttons */}

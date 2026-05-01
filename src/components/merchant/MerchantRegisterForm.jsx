@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Store, MapPin, Building2, Tag, ArrowRight, ArrowLeft,
   CheckCircle2, PartyPopper, Sparkles, Hash, MapPinned, Navigation,
+  Wallet,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../config/api';
@@ -13,7 +14,6 @@ import Button from '../ui/Button';
 import Input from '../ui/Input';
 import Select from '../ui/Select';
 import FileUpload from '../ui/FileUpload';
-import Spinner from '../ui/Spinner';
 import PlanSelector from './PlanSelector';
 import TermsAndConditions from '../ui/TermsAndConditions';
 
@@ -43,6 +43,7 @@ export default function MerchantRegisterForm() {
     area: '',
     city: '',
     shop_category: '',
+    shop_category_other: '',
     shop_size: '',
     gstin: '',
     pincode: '',
@@ -53,9 +54,11 @@ export default function MerchantRegisterForm() {
   });
 
   const [selectedPlan, setSelectedPlan] = useState(null);
-  const [paymentScreenshot, setPaymentScreenshot] = useState(null);
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [errors, setErrors] = useState({});
+
+  // Must match server-side `basic_plan_price` / `premium_plan_price` config.
+  const PLAN_PRICES = { basic: 1000, premium: 2500 };
 
   const handleShopChange = (e) => {
     const { name, value, files } = e.target;
@@ -128,9 +131,18 @@ export default function MerchantRegisterForm() {
     if (!shopDetails.area.trim()) newErrors.area = 'Area is required';
     if (!shopDetails.city.trim()) newErrors.city = 'City is required';
     if (!shopDetails.shop_category) newErrors.shop_category = 'Category is required';
+    if (shopDetails.shop_category === 'other' && !shopDetails.shop_category_other.trim()) {
+      newErrors.shop_category_other = 'Please specify your business type';
+    }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
+
+  const resolvedShopCategory = () => (
+    shopDetails.shop_category === 'other'
+      ? shopDetails.shop_category_other.trim()
+      : shopDetails.shop_category
+  );
 
   const goToStep2 = () => {
     if (validateStep1()) setStep(2);
@@ -141,9 +153,26 @@ export default function MerchantRegisterForm() {
     setStep(3);
   };
 
-  const handleScreenshotChange = (e) => {
-    const { files } = e.target;
-    setPaymentScreenshot(files?.[0] || null);
+  const postRegistration = async (paymentData) => {
+    try {
+      await api.post('/merchants/register', {
+        plan_type: selectedPlan,
+        shop_name: shopDetails.shop_name,
+        area: shopDetails.area || undefined,
+        city: shopDetails.city || undefined,
+        shop_category: resolvedShopCategory() || undefined,
+        razorpay_order_id: paymentData.razorpay_order_id,
+        razorpay_payment_id: paymentData.razorpay_payment_id,
+        razorpay_signature: paymentData.razorpay_signature,
+      });
+
+      setSuccess(true);
+      toast.success('Registration successful! Welcome aboard.');
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Registration failed');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSubmitRegistration = async () => {
@@ -151,29 +180,41 @@ export default function MerchantRegisterForm() {
       toast.error('Please accept the Terms & Conditions to continue');
       return;
     }
-    if (!paymentScreenshot) {
-      toast.error('Please upload the payment screenshot');
+    const amount = PLAN_PRICES[selectedPlan];
+    if (!amount) {
+      toast.error('Invalid plan selected');
       return;
     }
     setLoading(true);
     try {
-      const formData = new FormData();
-      formData.append('plan_type', selectedPlan);
-      formData.append('shop_name', shopDetails.shop_name);
-      if (shopDetails.area) formData.append('area', shopDetails.area);
-      if (shopDetails.city) formData.append('city', shopDetails.city);
-      if (shopDetails.shop_category) formData.append('shop_category', shopDetails.shop_category);
-      formData.append('payment_screenshot', paymentScreenshot);
-
-      await api.post('/merchants/register', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
+      const { data: orderRes } = await api.post('/payments/create-order', {
+        amount,
+        purpose: 'merchant_plan',
       });
+      const orderData = orderRes?.data || orderRes;
 
-      setSuccess(true);
-      toast.success('Registration submitted! Admin will verify your payment.');
+      await initiatePayment({
+        // /payments/create-order returns amount in rupees; Razorpay needs paise.
+        amount: Math.round(Number(amount) * 100),
+        order_id: orderData.order_id,
+        name: 'ZXCOM',
+        description: `Merchant subscription · ${selectedPlan}`,
+        prefill: {
+          name: user?.name || '',
+          email: user?.email || '',
+          contact: user?.phone || '',
+        },
+        handler: async (response) => {
+          await postRegistration({
+            razorpay_order_id: response.razorpay_order_id,
+            razorpay_payment_id: response.razorpay_payment_id,
+            razorpay_signature: response.razorpay_signature,
+          });
+        },
+        onDismiss: () => setLoading(false),
+      });
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Registration failed');
-    } finally {
+      toast.error(err.response?.data?.message || 'Failed to initiate payment');
       setLoading(false);
     }
   };
@@ -331,6 +372,19 @@ export default function MerchantRegisterForm() {
                 error={errors.shop_category}
               />
 
+              {shopDetails.shop_category === 'other' && (
+                <Input
+                  label="Specify Business Type"
+                  name="shop_category_other"
+                  placeholder="e.g. Florist, Bakery, Salon"
+                  icon={Store}
+                  value={shopDetails.shop_category_other}
+                  onChange={handleShopChange}
+                  error={errors.shop_category_other}
+                  required
+                />
+              )}
+
               {/* Shop Size */}
               <div className="space-y-1.5">
                 <label className="block text-sm font-medium text-white/80">Shop Size</label>
@@ -381,7 +435,7 @@ export default function MerchantRegisterForm() {
                 )}
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <Input label="Pincode" name="pincode" placeholder="Pincode" icon={MapPin} value={shopDetails.pincode} onChange={handleShopChange} />
+                  <Input label="Pincode" name="pincode" placeholder="Pincode" icon={MapPin} value={shopDetails.pincode} onChange={handleShopChange} digitsOnly maxLength={6} />
                   <Input
                     label="Area / Locality"
                     name="area"
@@ -449,36 +503,22 @@ export default function MerchantRegisterForm() {
             exit={{ opacity: 0, x: 20 }}
             transition={{ duration: 0.3 }}
           >
-            <GlassCard className="p-8 text-center space-y-5">
-              <h2 className="text-xl font-bold text-white">Complete Payment</h2>
-              <p className="text-sm text-white/50">
-                Plan: <span className="text-white font-medium capitalize">{selectedPlan}</span>
-              </p>
-
-              <div className="bg-white rounded-2xl p-4 mx-auto w-fit shadow-lg shadow-black/40">
-                <img
-                  src="/upi-qr-cropped.png"
-                  alt="UPI QR Code"
-                  className="w-56 h-56 object-contain mx-auto block"
-                  draggable={false}
-                />
-                <p className="text-center text-[10px] text-gray-500 mt-2 font-semibold tracking-wide">
-                  Scan with any UPI app
+            <GlassCard className="p-8 space-y-5">
+              <div className="text-center">
+                <h2 className="text-xl font-bold text-white">Complete Payment</h2>
+                <p className="text-sm text-white/50 mt-1">
+                  Plan: <span className="text-white font-medium capitalize">{selectedPlan}</span> —{' '}
+                  <span className="text-[#e94560] font-semibold">₹{PLAN_PRICES[selectedPlan]?.toLocaleString() || '—'}</span>
                 </p>
               </div>
 
-              <div className="bg-emerald-500/5 border border-emerald-500/15 rounded-xl p-4">
-                <p className="text-sm font-medium text-emerald-200/80 mb-1">Scan & Pay via any UPI app</p>
-                <p className="text-xs text-white/50 mt-2">After payment, upload the screenshot below</p>
+              <div className="bg-emerald-500/5 border border-emerald-500/15 rounded-xl p-5 text-center space-y-2">
+                <div className="inline-flex p-3 rounded-2xl bg-gradient-to-br from-emerald-500/20 to-emerald-600/10 mb-1">
+                  <Wallet className="w-7 h-7 text-emerald-400" />
+                </div>
+                <p className="text-sm font-semibold text-white">Secure Payment via Razorpay</p>
+                <p className="text-xs text-white/50">UPI, Credit / Debit Cards, Net Banking, Wallets</p>
               </div>
-
-              <FileUpload
-                label="Payment Screenshot"
-                name="payment_screenshot"
-                accept="image/*"
-                preview
-                onChange={handleScreenshotChange}
-              />
 
               <div className="text-left">
                 <TermsAndConditions
@@ -494,12 +534,12 @@ export default function MerchantRegisterForm() {
                 </Button>
                 <Button
                   fullWidth
-                  icon={CheckCircle2}
+                  icon={Wallet}
                   loading={loading}
                   disabled={!termsAccepted}
                   onClick={handleSubmitRegistration}
                 >
-                  Submit Registration
+                  Pay ₹{PLAN_PRICES[selectedPlan]?.toLocaleString() || ''} & Activate
                 </Button>
               </div>
             </GlassCard>

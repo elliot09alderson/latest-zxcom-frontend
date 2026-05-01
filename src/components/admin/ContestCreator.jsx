@@ -16,7 +16,7 @@ const initialForm = {
   title: '',
   offer_id: '',
   banner: null,
-  target_audience: 'all',
+  target_audience: 'customer',
   areas: [],
   shop_categories: [],
   plan_types: { basic: false, premium: false, enterprise: false },
@@ -222,9 +222,9 @@ export default function ContestCreator({ onCreated }) {
                   value={form.target_audience}
                   onChange={handleChange}
                   options={[
-                    { value: 'all', label: 'All' },
-                    { value: 'merchants', label: 'Merchants Only' },
-                    { value: 'customers', label: 'Customers Only' },
+                    { value: 'customer', label: 'Customers (QR scans during the contest window)' },
+                    { value: 'merchant', label: 'Merchants (active shops, filterable)' },
+                    { value: 'promoter', label: 'Promoters (active promoters, filterable by min shops onboarded)' },
                   ]}
                 />
                 <div className="grid grid-cols-2 gap-4">
@@ -330,12 +330,20 @@ export default function ContestCreator({ onCreated }) {
                 </div>
 
                 <Input
-                  label="Min Submission Volume"
+                  label={
+                    form.target_audience === 'promoter'
+                      ? 'Min Shops Onboarded (per promoter)'
+                      : form.target_audience === 'merchant'
+                        ? 'Min Submissions This Month (per shop)'
+                        : 'Min Submission Volume'
+                  }
                   name="min_submissions"
                   type="number"
                   value={form.min_submissions}
                   onChange={handleChange}
-                  placeholder="e.g. 10"
+                  placeholder={
+                    form.target_audience === 'promoter' ? 'e.g. 5' : 'e.g. 10'
+                  }
                 />
               </div>
             )}

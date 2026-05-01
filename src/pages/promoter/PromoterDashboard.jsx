@@ -11,6 +11,7 @@ import {
   Shield,
   Copy,
   Link2,
+  ShoppingBag,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import useFetch from '../../hooks/useFetch';
@@ -29,6 +30,7 @@ const sidebarLinks = [
   { path: '/promoter/network', label: 'Network', icon: <Users size={18} /> },
   { path: '/promoter/qr-codes', label: 'QR Codes', icon: <QrCode size={18} /> },
   { path: '/promoter/earnings', label: 'Earnings', icon: <IndianRupee size={18} /> },
+  { path: '/promoter/orders', label: 'My Orders', icon: <ShoppingBag size={18} /> },
   { path: '/promoter/id-card', label: 'ID Card', icon: <CreditCard size={18} /> },
   { path: '/promoter/profile', label: 'Profile', icon: <User size={18} /> },
 ];

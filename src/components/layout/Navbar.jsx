@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Menu, X, LogOut, User, Store, Users, ShoppingCart, Heart, Coins } from 'lucide-react';
+import { Menu, X, LogOut, User, Store, Users, ShoppingCart, Heart, Coins, ChevronDown, Briefcase } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
 import api from '../../config/api';
+import Logo from '../ui/Logo';
 
 const roleLinks = {
   customer: [
@@ -35,11 +36,12 @@ const roleLinks = {
   ],
 };
 
+// Customer-facing flat links. The Member dropdown is rendered separately
+// because it needs hover behaviour for its sub-options.
 const guestLinks = [
   { path: '/', label: 'Home' },
   { path: '/login', label: 'Login' },
   { path: '/register', label: 'Sign Up' },
-  { path: '/register?type=business', label: 'Become a Member' },
 ];
 
 export default function Navbar() {
@@ -135,9 +137,7 @@ export default function Navbar() {
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
           <Link to="/" className="flex-shrink-0">
-            <span className="text-2xl font-extrabold tracking-tight bg-gradient-to-r from-[#e94560] to-[#c23616] bg-clip-text text-transparent">
-              ZXCOM
-            </span>
+            <Logo size="sm" />
           </Link>
 
           {/* Desktop links */}
@@ -152,6 +152,43 @@ export default function Navbar() {
                 )}
               </NavLink>
             ))}
+
+            {/* Member dropdown — only for guests. Hover reveals Login/Register
+                for the merchant/promoter portal. Customer login + signup
+                stay as flat links above. */}
+            {!isAuthenticated && (
+              <div className="relative group">
+                <button
+                  type="button"
+                  className="relative px-3 py-2 text-sm font-medium text-white/70 hover:text-white transition-colors duration-200 inline-flex items-center gap-1"
+                  aria-haspopup="menu"
+                >
+                  Member
+                  <ChevronDown className="w-3.5 h-3.5 transition-transform group-hover:rotate-180" />
+                </button>
+                <div className="absolute right-0 top-full pt-1 min-w-[180px] opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-150 z-50">
+                  <div className="rounded-xl border border-white/10 bg-black/80 backdrop-blur-xl shadow-2xl overflow-hidden">
+                    <Link
+                      to="/member/login"
+                      className="flex items-center gap-2 px-4 py-2.5 text-sm text-white/80 hover:text-white hover:bg-white/5 transition-colors"
+                    >
+                      <Briefcase className="w-3.5 h-3.5 text-[#e94560]" />
+                      Login
+                      <span className="text-[10px] text-white/30 ml-auto">Merchant / Promoter</span>
+                    </Link>
+                    <div className="h-px bg-white/5 mx-2" />
+                    <Link
+                      to="/member/register"
+                      className="flex items-center gap-2 px-4 py-2.5 text-sm text-white/80 hover:text-white hover:bg-white/5 transition-colors"
+                    >
+                      <Store className="w-3.5 h-3.5 text-[#e94560]" />
+                      Register
+                      <span className="text-[10px] text-white/30 ml-auto">Become a Member</span>
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Cart / Wishlist / Credits — always visible */}
             <div className="flex items-center gap-1 ml-4 pl-4 border-l border-white/10">
@@ -256,6 +293,29 @@ export default function Navbar() {
                   {link.label}
                 </NavLink>
               ))}
+
+              {/* Member section on mobile */}
+              {!isAuthenticated && (
+                <div className="pt-3 mt-2 border-t border-white/10">
+                  <p className="px-3 py-1 text-[10px] uppercase tracking-wider text-white/30 font-semibold">Member</p>
+                  <Link
+                    to="/member/login"
+                    onClick={() => setMobileOpen(false)}
+                    className="flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium text-white/70 hover:text-white hover:bg-white/5 transition-all"
+                  >
+                    <Briefcase className="w-4 h-4 text-[#e94560]" />
+                    Member Login
+                  </Link>
+                  <Link
+                    to="/member/register"
+                    onClick={() => setMobileOpen(false)}
+                    className="flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium text-white/70 hover:text-white hover:bg-white/5 transition-all"
+                  >
+                    <Store className="w-4 h-4 text-[#e94560]" />
+                    Become a Member
+                  </Link>
+                </div>
+              )}
 
               {isAuthenticated && user && (
                 <div className="pt-3 mt-2 border-t border-white/10">

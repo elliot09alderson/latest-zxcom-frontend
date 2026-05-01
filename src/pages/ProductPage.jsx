@@ -5,7 +5,8 @@ import { Star, Heart, ShoppingCart, Truck, Shield, RotateCcw, Check, ChevronRigh
 import toast from 'react-hot-toast';
 import PublicLayout from '../components/layout/PublicLayout';
 import ProductCard from '../components/ecom/ProductCard';
-import { getProductById, getSimilarProducts } from '../data/products';
+import { fetchProductById, fetchSimilarProducts } from '../data/products';
+import Spinner from '../components/ui/Spinner';
 import { useCart } from '../context/CartContext';
 import { useWishlist } from '../context/WishlistContext';
 import Seo, { SITE_URL, BRAND } from '../components/seo/Seo';
@@ -109,15 +110,43 @@ function ReviewCard({ review }) {
 // ── Main Page ──
 export default function ProductPage() {
   const { id } = useParams();
-  const product = getProductById(id);
+  const [product, setProduct] = useState(null);
+  const [similar, setSimilar] = useState([]);
+  const [loading, setLoading] = useState(true);
   const { addToCart, isInCart, items, updateQty } = useCart();
   const { toggleWishlist, isWishlisted } = useWishlist();
-  const [selectedSize, setSelectedSize] = useState('M');
+  const [selectedSize, setSelectedSize] = useState('');
 
-  // Scroll to top on product change
+  // Fetch + scroll-to-top on product change
   useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    (async () => {
+      const p = await fetchProductById(id);
+      if (cancelled) return;
+      setProduct(p);
+      if (p) {
+        const sim = await fetchSimilarProducts(p);
+        if (!cancelled) setSimilar(sim);
+        // Auto-pick the first in-stock size for clothing.
+        if (p.isClothing && p.sizes?.length) {
+          const firstInStock = p.sizes.find((s) => s.stock > 0);
+          setSelectedSize(firstInStock?.size || p.sizes[0].size);
+        }
+      }
+      setLoading(false);
+    })();
     window.scrollTo(0, 0);
+    return () => { cancelled = true; };
   }, [id]);
+
+  if (loading) {
+    return (
+      <PublicLayout>
+        <div className="flex items-center justify-center py-32"><Spinner size="lg" /></div>
+      </PublicLayout>
+    );
+  }
 
   if (!product) {
     return (
@@ -142,12 +171,28 @@ export default function ProductPage() {
   const liked = isWishlisted(product.id);
   const inCart = isInCart(product.id);
   const cartItem = items.find((i) => i.id === product.id);
-  const similar = getSimilarProducts(product);
   const avgRating = product.rating || 4.3;
   const reviewCount = product.reviews || mockReviews.length;
 
+  // Stock for the currently selected size (clothing) or global (non-clothing).
+  const sizeStockMap = product.isClothing
+    ? Object.fromEntries((product.sizes || []).map((s) => [s.size, s.stock]))
+    : {};
+  const availableHere = product.isClothing
+    ? (sizeStockMap[selectedSize] || 0)
+    : product.availableStock;
+  const outOfStock = availableHere <= 0;
+
   const handleAddToCart = () => {
-    addToCart(product);
+    if (outOfStock) {
+      toast.error('Out of stock');
+      return;
+    }
+    if (product.isClothing && !selectedSize) {
+      toast.error('Please choose a size');
+      return;
+    }
+    addToCart({ ...product, size: selectedSize || undefined, maxStock: availableHere });
     toast.success('Added to cart');
   };
 
@@ -249,28 +294,70 @@ export default function ProductPage() {
               <p className="text-white/20 text-xs mt-1">Inclusive of all taxes</p>
             </div>
 
-            {/* Size Selector */}
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-white font-semibold text-sm">Select Size</h3>
-                <button className="text-[#e94560] text-xs font-medium hover:underline cursor-pointer">Size Guide</button>
+            {/* Size Selector (only for clothing) */}
+            {product.isClothing && (
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-white font-semibold text-sm">Select Size</h3>
+                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[11px] font-semibold ${
+                    outOfStock ? 'bg-red-500/15 text-red-300 border-red-500/30'
+                    : availableHere <= 5 ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                    : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                  }`}>
+                    {outOfStock ? 'Out of stock' : `${availableHere} left${selectedSize ? ` in ${selectedSize}` : ''}`}
+                  </span>
+                </div>
+                <div className="flex gap-2.5 flex-wrap">
+                  {(product.sizes && product.sizes.length ? product.sizes : sizes.map((s) => ({ size: s, stock: 0 }))).map((entry) => {
+                    const s = entry.size;
+                    const stock = Number(entry.stock || 0);
+                    const sizeOut = stock <= 0;
+                    const isSelected = selectedSize === s;
+                    return (
+                      <button
+                        key={s}
+                        onClick={() => !sizeOut && setSelectedSize(s)}
+                        disabled={sizeOut}
+                        className={`relative w-14 h-14 rounded-xl border text-sm font-semibold transition-all flex flex-col items-center justify-center gap-0 ${
+                          sizeOut
+                            ? 'bg-white/[0.02] border-white/5 text-white/25 cursor-not-allowed'
+                            : isSelected
+                              ? 'bg-[#e94560] border-[#e94560] text-white shadow-lg shadow-[#e94560]/20 cursor-pointer'
+                              : 'bg-white/5 border-white/10 text-white/80 hover:border-white/30 hover:text-white cursor-pointer'
+                        }`}
+                        title={sizeOut ? 'Out of stock' : `${stock} in stock`}
+                      >
+                        <span className={sizeOut ? 'line-through' : ''}>{s}</span>
+                        <span className={`text-[9px] font-bold leading-none mt-0.5 ${
+                          sizeOut
+                            ? 'text-red-400/70'
+                            : isSelected
+                              ? 'text-white/90'
+                              : stock <= 5
+                                ? 'text-amber-400'
+                                : 'text-emerald-400'
+                        }`}>
+                          {sizeOut ? 'SOLD OUT' : stock <= 5 ? `${stock} left` : `${stock} in`}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-              <div className="flex gap-2.5">
-                {sizes.map((size) => (
-                  <button
-                    key={size}
-                    onClick={() => setSelectedSize(size)}
-                    className={`w-12 h-12 rounded-xl border text-sm font-semibold transition-all cursor-pointer ${
-                      selectedSize === size
-                        ? 'bg-[#e94560] border-[#e94560] text-white shadow-lg shadow-[#e94560]/20'
-                        : 'bg-white/5 border-white/10 text-white/60 hover:border-white/30 hover:text-white'
-                    }`}
-                  >
-                    {size}
-                  </button>
-                ))}
+            )}
+
+            {/* Non-clothing stock indicator */}
+            {!product.isClothing && (
+              <div>
+                <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${
+                  outOfStock ? 'bg-red-500/15 text-red-300 border border-red-500/30'
+                  : availableHere <= 5 ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
+                  : 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
+                }`}>
+                  {outOfStock ? 'Out of stock' : availableHere <= 5 ? `Only ${availableHere} left` : `${availableHere} in stock`}
+                </span>
               </div>
-            </div>
+            )}
 
             {/* Add to Cart / Quantity */}
             <div className="flex flex-col sm:flex-row gap-3">
@@ -281,20 +368,36 @@ export default function ProductPage() {
                       <Minus className="w-4 h-4" />
                     </button>
                     <span className="px-6 py-3 text-white font-semibold bg-white/[0.03] min-w-[52px] text-center">{cartItem?.qty || 1}</span>
-                    <button onClick={() => updateQty(product.id, (cartItem?.qty || 1) + 1)} className="px-4 py-3 bg-white/5 hover:bg-white/10 text-white transition-colors cursor-pointer">
+                    <button
+                      onClick={() => {
+                        const next = (cartItem?.qty || 1) + 1;
+                        if (next > availableHere) {
+                          toast.error(`Only ${availableHere} available`);
+                          return;
+                        }
+                        updateQty(product.id, next);
+                      }}
+                      className="px-4 py-3 bg-white/5 hover:bg-white/10 text-white transition-colors cursor-pointer"
+                    >
                       <Plus className="w-4 h-4" />
                     </button>
                   </div>
                   <span className="text-green-400 text-sm font-medium flex items-center gap-1.5">
-                    <Check className="w-4 h-4" /> Added — Size {selectedSize}
+                    <Check className="w-4 h-4" /> Added{product.isClothing && selectedSize ? ` — Size ${selectedSize}` : ''}
                   </span>
                 </div>
               ) : (
                 <button
                   onClick={handleAddToCart}
-                  className="flex-1 flex items-center justify-center gap-2 px-8 py-3.5 rounded-xl bg-[#e94560] hover:bg-[#d63d56] text-white font-semibold transition-colors shadow-lg shadow-[#e94560]/20 cursor-pointer text-base"
+                  disabled={outOfStock}
+                  className={`flex-1 flex items-center justify-center gap-2 px-8 py-3.5 rounded-xl font-semibold transition-colors text-base ${
+                    outOfStock
+                      ? 'bg-white/10 text-white/40 cursor-not-allowed'
+                      : 'bg-[#e94560] hover:bg-[#d63d56] text-white shadow-lg shadow-[#e94560]/20 cursor-pointer'
+                  }`}
                 >
-                  <ShoppingCart className="w-5 h-5" /> Add to Cart — ₹{product.price}
+                  <ShoppingCart className="w-5 h-5" />
+                  {outOfStock ? 'Out of Stock' : `Add to Cart — \u20B9${product.price}`}
                 </button>
               )}
 

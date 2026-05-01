@@ -19,12 +19,12 @@ const SITE_URL = (process.env.VITE_SITE_URL || 'https://zxcom.in').replace(/\/$/
 const OUTPUT = resolve(ROOT, 'public', 'sitemap.xml');
 
 async function main() {
-  // Dynamic import because the data file uses ESM.
-  const productsModule = await import(
-    pathToFileURL(resolve(ROOT, 'src/data/products.js')).href
-  );
-  const allProducts = productsModule.default || [];
-  const trendingProducts = productsModule.trendingProducts || [];
+  // The product catalogue is DB-backed now; there is no static list to
+  // enumerate at build time. Google's crawler will discover product URLs
+  // by following links from /. A richer sitemap can be generated at runtime
+  // from the backend later (GET /public/products then emit /sitemap.xml).
+  const allProducts = [];
+  const trendingProducts = [];
 
   const today = new Date().toISOString().split('T')[0];
 
