@@ -99,7 +99,7 @@ function SuccessScreen({ merchantName }) {
         </motion.div>
 
         <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.2 }} className="text-xs text-white/30 mt-5">
-          You can close this page now
+          Redirecting you to zx.money…
         </motion.p>
       </GlassCard>
     </div>
@@ -119,6 +119,7 @@ export default function ScanPage() {
 
   const [step, setStep] = useState(1); // 1: form, 2: success
   const [submitLoading, setSubmitLoading] = useState(false);
+  const [submittedPhone, setSubmittedPhone] = useState('');
 
   useEffect(() => {
     const fetchQRData = async () => {
@@ -163,8 +164,12 @@ export default function ScanPage() {
       if (formData.bill_image) fd.append('bill_image', formData.bill_image);
 
       await api.post('/customers/submit', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      setSubmittedPhone(formData.phone);
       setStep(2);
       toast.success('Entry submitted successfully!');
+      setTimeout(() => {
+        window.location.href = `https://zxmoney.in/${formData.phone}`;
+      }, 2000);
     } catch (err) {
       toast.error(err.response?.data?.message || 'Submission failed. Please try again.');
     } finally {
@@ -211,7 +216,7 @@ export default function ScanPage() {
                 />
               )}
               {step === 2 && (
-                <SuccessScreen merchantName={merchantInfo?.shop_name} />
+                <SuccessScreen merchantName={merchantInfo?.shop_name} phone={submittedPhone} />
               )}
             </motion.div>
           )}
