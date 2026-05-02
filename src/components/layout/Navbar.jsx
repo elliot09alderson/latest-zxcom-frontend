@@ -52,11 +52,12 @@ export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [credits, setCredits] = useState(null);
   const [shopName, setShopName] = useState('');
+  const [walletBalance, setWalletBalance] = useState(0);
 
   const isPromoter = user?.role === 'promoter' || user?.role === 'area_manager';
   const isMerchant = user?.role === 'merchant';
 
-  // Fetch promoter credits
+  // Fetch promoter credits + wallet
   useEffect(() => {
     if (!isAuthenticated || !isPromoter) return;
     api.get('/promoters/profile')
@@ -68,17 +69,19 @@ export default function Navbar() {
           promotersUsed: p.total_promoters_count || 0,
           promotersMax: p.max_promoters_allowed || 0,
         });
+        setWalletBalance(p.commission_earned || 0);
       })
       .catch(() => {});
   }, [isAuthenticated, isPromoter]);
 
-  // Fetch merchant shop name
+  // Fetch merchant shop name + wallet
   useEffect(() => {
     if (!isAuthenticated || !isMerchant) return;
     api.get('/merchants/profile')
       .then((res) => {
         const m = res.data?.data?.merchant || res.data?.merchant || {};
         setShopName(m.shop_name || '');
+        setWalletBalance(m.wallet_balance || 0);
       })
       .catch(() => {});
   }, [isAuthenticated, isMerchant]);
@@ -192,11 +195,21 @@ export default function Navbar() {
 
             {/* Cart / Wishlist / Credits — always visible */}
             <div className="flex items-center gap-1 ml-4 pl-4 border-l border-white/10">
-              {/* Credits */}
-              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 mr-1" title="Credits">
-                <Coins className="w-3.5 h-3.5 text-yellow-400" />
-                <span className="text-xs font-bold text-white">0</span>
-              </div>
+              {/* Wallet Balance */}
+              {(isMerchant || isPromoter) && (
+                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 mr-1" title="Wallet Balance">
+                  <Coins className="w-3.5 h-3.5 text-yellow-400" />
+                  <span className="text-xs font-bold text-white">
+                    {walletBalance > 0 ? `₹${walletBalance.toLocaleString('en-IN')}` : '₹0'}
+                  </span>
+                </div>
+              )}
+              {!isMerchant && !isPromoter && (
+                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 mr-1" title="Credits">
+                  <Coins className="w-3.5 h-3.5 text-yellow-400" />
+                  <span className="text-xs font-bold text-white">0</span>
+                </div>
+              )}
 
               <IconBadge icon={Heart} count={wishlistCount} onClick={() => navigate('/')} label="Wishlist" />
               <IconBadge icon={ShoppingCart} count={cartCount} onClick={() => navigate('/checkout')} label="Cart" />
@@ -238,11 +251,20 @@ export default function Navbar() {
 
           {/* Mobile right side */}
           <div className="flex items-center gap-1 md:hidden">
-            {/* Credits */}
-            <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-white/5 border border-white/10" title="Credits">
-              <Coins className="w-3 h-3 text-yellow-400" />
-              <span className="text-[10px] font-bold text-white">0</span>
-            </div>
+            {/* Wallet Balance */}
+            {(isMerchant || isPromoter) ? (
+              <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-white/5 border border-white/10" title="Wallet Balance">
+                <Coins className="w-3 h-3 text-yellow-400" />
+                <span className="text-[10px] font-bold text-white">
+                  {walletBalance > 0 ? `₹${walletBalance.toLocaleString('en-IN')}` : '₹0'}
+                </span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-white/5 border border-white/10" title="Credits">
+                <Coins className="w-3 h-3 text-yellow-400" />
+                <span className="text-[10px] font-bold text-white">0</span>
+              </div>
+            )}
 
             <IconBadge icon={Heart} count={wishlistCount} onClick={() => navigate('/')} label="Wishlist" />
             <IconBadge icon={ShoppingCart} count={cartCount} onClick={() => navigate('/checkout')} label="Cart" />

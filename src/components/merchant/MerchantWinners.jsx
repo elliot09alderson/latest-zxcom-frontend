@@ -9,14 +9,20 @@ import EmptyState from '../ui/EmptyState';
 const API_BASE = import.meta.env.VITE_API_URL?.replace('/api', '') || '';
 const fullUrl = (url) => url ? (url.startsWith('http') ? url : `${API_BASE}${url}`) : '';
 
-const maskPhone = (p) => p ? `${p.slice(0, -6)}${'*'.repeat(6)}` : '';
+// Show first 4 digits, mask remaining 6 with stars: 9876******
+const maskPhone = (p) => {
+  if (!p) return '';
+  const digits = p.replace(/\D/g, '');
+  if (digits.length < 5) return digits;
+  return `${digits.slice(0, 4)}${'*'.repeat(Math.max(digits.length - 4, 6))}`;
+};
 
 function WinnerCard({ winner, idx }) {
-  const name = winner.customer_id?.name || winner.customer_name || winner.name || 'Winner';
-  const phone = maskPhone(winner.customer_id?.phone || winner.phone || '');
+  const name = winner.winner_name || winner.customer_id?.name || winner.promoter_id?.name || winner.merchant_id?.name || 'Winner';
+  const phone = maskPhone(winner.winner_phone || winner.customer_id?.phone || winner.promoter_id?.phone || winner.merchant_id?.phone || '');
   const photo = fullUrl(winner.customer_id?.profile_photo_url || '');
-  const contest = winner.contest_id?.title || winner.contest_name || winner.contest || 'Contest';
-  const prize = winner.contest_id?.prize_amount || winner.prize_amount || 0;
+  const contest = winner.contest_id?.title || winner.contest_name || winner.contest || winner.prize || 'Contest';
+  const prize = winner.prize_value || winner.contest_id?.prize_amount || winner.prize_amount || 0;
   const date = winner.selected_at || winner.date || winner.createdAt;
 
   return (
@@ -61,9 +67,9 @@ function WinnerCard({ winner, idx }) {
               : '--'}
           </span>
         </div>
-        {prize > 0 && (
-          <span className="text-xs font-semibold text-amber-400">₹{prize.toLocaleString('en-IN')}</span>
-        )}
+        <span className={`text-xs font-semibold ${prize > 0 ? 'text-amber-400' : 'text-white/20'}`}>
+          {prize > 0 ? `₹${prize.toLocaleString('en-IN')}` : 'No prize'}
+        </span>
       </div>
     </motion.div>
   );

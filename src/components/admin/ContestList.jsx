@@ -115,24 +115,21 @@ export default function ContestList() {
       exportable: false,
       render: (_, row) => {
         const id = row._id || row.id;
-        const isCompleted = row.status?.toLowerCase() === 'completed';
 
         return (
           <div className="flex items-center gap-2">
-            {!isCompleted && (
-              <button
-                onClick={() => handleDrawWinners(id)}
-                disabled={drawingId === id}
-                className="p-1.5 rounded-lg text-amber-400 hover:bg-amber-400/10 transition-all cursor-pointer disabled:opacity-50"
-                title="Draw Winners"
-              >
-                {drawingId === id ? (
-                  <div className="w-4 h-4 border-2 border-amber-400/30 border-t-amber-400 rounded-full animate-spin" />
-                ) : (
-                  <Zap className="w-4 h-4" />
-                )}
-              </button>
-            )}
+            <button
+              onClick={() => handleDrawWinners(id)}
+              disabled={drawingId === id}
+              className="p-1.5 rounded-lg text-amber-400 hover:bg-amber-400/10 transition-all cursor-pointer disabled:opacity-50"
+              title="Draw Winners"
+            >
+              {drawingId === id ? (
+                <div className="w-4 h-4 border-2 border-amber-400/30 border-t-amber-400 rounded-full animate-spin" />
+              ) : (
+                <Zap className="w-4 h-4" />
+              )}
+            </button>
             <button
               onClick={() => handleViewEntries(row)}
               className="p-1.5 rounded-lg text-white/50 hover:text-blue-400 hover:bg-blue-400/10 transition-all cursor-pointer"
@@ -278,11 +275,11 @@ export default function ContestList() {
                     >
                       <div>
                         <p className="text-sm text-white font-medium">
-                          {entry.name || entry.participant_name || `Entry #${i + 1}`}
+                          {entry.customer_id?.name || entry.name || entry.participant_name || `Entry #${i + 1}`}
                         </p>
                         <p className="text-xs text-white/40">
-                          {entry.phone || entry.email || ''}{' '}
-                          {entry.submitted_at && `· ${new Date(entry.submitted_at).toLocaleDateString('en-IN')}`}
+                          {entry.customer_id?.phone || entry.phone || entry.email || ''}{' '}
+                          {entry.createdAt && `· ${new Date(entry.createdAt).toLocaleDateString('en-IN')}`}
                         </p>
                       </div>
                       <Badge

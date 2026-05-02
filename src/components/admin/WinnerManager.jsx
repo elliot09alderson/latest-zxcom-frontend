@@ -86,9 +86,9 @@ export default function WinnerManager() {
   };
 
   const getWinnerName = (row) =>
-    row.customer_id?.name || row.promoter_id?.name || row.merchant_id?.name || row.winner_name || '-';
+    row.winner_name || row.customer_id?.name || row.promoter_id?.name || row.merchant_id?.name || 'Unknown';
   const getWinnerPhone = (row) =>
-    row.customer_id?.phone || row.promoter_id?.phone || row.merchant_id?.phone || row.winner_phone || '-';
+    row.winner_phone || row.customer_id?.phone || row.promoter_id?.phone || row.merchant_id?.phone || '-';
 
   const columns = [
     {
@@ -108,8 +108,15 @@ export default function WinnerManager() {
     },
     {
       key: 'prize',
-      label: 'Prize',
-      render: (val, row) => val || row.prize_description || '-',
+      label: 'Contest / Prize',
+      render: (val, row) => (
+        <div>
+          <p className="text-sm text-white">{val || row.contest_id?.title || '-'}</p>
+          {row.prize_value > 0 && (
+            <p className="text-xs text-amber-400 font-semibold">₹{row.prize_value.toLocaleString('en-IN')}</p>
+          )}
+        </div>
+      ),
     },
     {
       key: 'selected_at',
