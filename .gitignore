@@ -38,3 +38,6 @@ whatsleft.txt
 *.njsproj
 *.sln
 *.sw?
+
+# Build archives
+*.zip

@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Menu, X, LogOut, User, Store, Users, ShoppingCart, Heart, Coins, ChevronDown, Briefcase } from 'lucide-react';
+import { Menu, X, LogOut, User, Store, Users, ShoppingCart, Heart, Coins, ChevronDown, Briefcase, Share2, UserPlus, Copy, Link2 } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { useAuth } from '../../context/AuthContext';
 import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
@@ -53,6 +54,10 @@ export default function Navbar() {
   const [credits, setCredits] = useState(null);
   const [shopName, setShopName] = useState('');
   const [walletBalance, setWalletBalance] = useState(0);
+  const [referralCode, setReferralCode] = useState('');
+  const [shareOpen, setShareOpen] = useState(false);
+  const [shareTab, setShareTab] = useState('promoter'); // 'promoter' | 'merchant'
+  const shareRef = useRef(null);
 
   const isPromoter = user?.role === 'promoter' || user?.role === 'area_manager';
   const isMerchant = user?.role === 'merchant';
@@ -70,6 +75,7 @@ export default function Navbar() {
           promotersMax: p.max_promoters_allowed || 0,
         });
         setWalletBalance(p.commission_earned || 0);
+        setReferralCode(p.referral_code || user?.phone || '');
       })
       .catch(() => {});
   }, [isAuthenticated, isPromoter]);
@@ -85,6 +91,47 @@ export default function Navbar() {
       })
       .catch(() => {});
   }, [isAuthenticated, isMerchant]);
+
+  // Close share dropdown when clicking outside
+  useEffect(() => {
+    if (!shareOpen) return;
+    const handler = (e) => { if (shareRef.current && !shareRef.current.contains(e.target)) setShareOpen(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [shareOpen]);
+
+  const getShareLinks = () => {
+    const base = window.location.origin;
+    const ref = encodeURIComponent(referralCode || '');
+    return {
+      promoter: `${base}/register?ref=${ref}`,
+      merchant: `${base}/member/register?ref=${ref}&role=merchant`,
+    };
+  };
+
+  const copyLink = async (type) => {
+    const url = getShareLinks()[type];
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success('Link copied!');
+    } catch {
+      toast.error('Could not copy link');
+    }
+  };
+
+  const doShare = async (type) => {
+    const url = getShareLinks()[type];
+    const isPromoter = type === 'promoter';
+    const title = isPromoter ? 'Join ZXCOM as a Promoter' : 'Register your shop on ZXCOM';
+    const text  = isPromoter
+      ? 'Join ZXCOM as a Promoter using my referral link and start earning:'
+      : 'Register your shop on ZXCOM using my referral link:';
+    if (navigator.share) {
+      try { await navigator.share({ title, text, url }); } catch { /* cancelled */ }
+    } else {
+      window.open(`https://wa.me/?text=${encodeURIComponent(`${text} ${url}`)}`, '_blank', 'noopener');
+    }
+  };
 
   const links = isAuthenticated && user?.role
     ? roleLinks[user.role] || guestLinks
@@ -217,11 +264,35 @@ export default function Navbar() {
 
             {isAuthenticated && user && (
               <div className="flex items-center gap-3 ml-3 pl-3 border-l border-white/10">
-                {/* Promoter Credits */}
+                {/* Promoter Credits + Share */}
                 {isPromoter && credits && (
                   <div className="flex items-center gap-2">
                     <CreditBadge icon={Store} used={credits.shopsUsed} max={credits.shopsMax} color="#10b981" label="Merchant Credits" />
                     <CreditBadge icon={Users} used={credits.promotersUsed} max={credits.promotersMax} color="#3b82f6" label="Promoter Credits" />
+                    {/* Share / Onboard button */}
+                    <div className="relative" ref={shareRef}>
+                      <button
+                        onClick={() => setShareOpen((v) => !v)}
+                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#e94560]/15 border border-[#e94560]/40 text-[#e94560] hover:bg-[#e94560]/25 transition-colors text-xs font-semibold"
+                        title="Share onboarding link"
+                      >
+                        <Share2 className="w-3.5 h-3.5" />
+                        <span className="hidden lg:inline">Onboard</span>
+                      </button>
+                      <AnimatePresence>
+                        {shareOpen && (
+                          <motion.div
+                            initial={{ opacity: 0, y: -6, scale: 0.95 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            exit={{ opacity: 0, y: -6, scale: 0.95 }}
+                            transition={{ duration: 0.15 }}
+                            className="absolute right-0 top-full mt-2 w-80 rounded-2xl border border-white/10 bg-[#0d0d1f]/95 backdrop-blur-xl shadow-2xl z-50 overflow-hidden"
+                          >
+                            <SharePanel tab={shareTab} setTab={setShareTab} getShareLinks={getShareLinks} copyLink={copyLink} doShare={doShare} />
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
                   </div>
                 )}
 
@@ -290,11 +361,16 @@ export default function Navbar() {
             className="md:hidden overflow-hidden bg-black/40 backdrop-blur-xl border-b border-white/10"
           >
             <div className="px-4 py-3 space-y-1">
-              {/* Mobile Credits */}
+              {/* Mobile Credits + Share */}
               {isPromoter && credits && (
-                <div className="flex items-center gap-2 px-3 py-2 mb-2">
-                  <CreditBadge icon={Store} used={credits.shopsUsed} max={credits.shopsMax} color="#10b981" label="Merchant Credits" />
-                  <CreditBadge icon={Users} used={credits.promotersUsed} max={credits.promotersMax} color="#3b82f6" label="Promoter Credits" />
+                <div className="px-3 py-2 mb-1 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <CreditBadge icon={Store} used={credits.shopsUsed} max={credits.shopsMax} color="#10b981" label="Merchant Credits" />
+                    <CreditBadge icon={Users} used={credits.promotersUsed} max={credits.promotersMax} color="#3b82f6" label="Promoter Credits" />
+                  </div>
+                  <div className="pt-1">
+                    <SharePanel tab={shareTab} setTab={setShareTab} getShareLinks={getShareLinks} copyLink={copyLink} doShare={doShare} mobile />
+                  </div>
                 </div>
               )}
 
@@ -363,5 +439,91 @@ export default function Navbar() {
         )}
       </AnimatePresence>
     </nav>
+  );
+}
+
+const TABS = [
+  { key: 'promoter', label: 'Promoter', icon: UserPlus, color: 'text-[#e94560]', bg: 'bg-[#e94560]/20' },
+  { key: 'merchant', label: 'Merchant', icon: Store,    color: 'text-emerald-400', bg: 'bg-emerald-500/20' },
+];
+
+function SharePanel({ tab, setTab, getShareLinks, copyLink, doShare, mobile = false }) {
+  const active = TABS.find((t) => t.key === tab) || TABS[0];
+  const Icon = active.icon;
+  const link = getShareLinks()[tab];
+  const hasShare = typeof navigator !== 'undefined' && !!navigator.share;
+
+  return (
+    <div className={mobile ? '' : 'p-4'}>
+      {/* Tab switcher */}
+      <div className={`flex gap-2 ${mobile ? 'mb-3' : 'mb-4'}`}>
+        {TABS.map((t) => (
+          <button
+            key={t.key}
+            onClick={() => setTab(t.key)}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-[13px] font-semibold transition-colors border ${
+              tab === t.key
+                ? `${t.bg} ${t.color} border-current/30`
+                : 'bg-white/5 text-white/50 border-white/10 hover:text-white'
+            }`}
+          >
+            <t.icon className="w-3.5 h-3.5" />
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Header */}
+      <div className="flex items-center gap-3 mb-3">
+        <div className={`p-2 rounded-xl ${active.bg}`}>
+          <Icon className={`w-4 h-4 ${active.color}`} />
+        </div>
+        <div>
+          <p className="text-sm font-bold text-white">
+            {tab === 'promoter' ? 'Refer a Promoter' : 'Onboard a Merchant'}
+          </p>
+          <p className="text-[11px] text-white/40">
+            {tab === 'promoter'
+              ? 'Share your link — they fill the form, you grow your network.'
+              : 'Share your link — merchant registers and links to you.'}
+          </p>
+        </div>
+      </div>
+
+      {/* Link box */}
+      <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 mb-3">
+        <Link2 className="w-3.5 h-3.5 text-white/30 flex-shrink-0" />
+        <span className="text-[11px] text-white/60 truncate flex-1">{link}</span>
+        <button
+          onClick={() => copyLink(tab)}
+          className="p-1 rounded-lg hover:bg-white/10 text-white/50 hover:text-white transition-colors flex-shrink-0"
+          title="Copy"
+        >
+          <Copy className="w-3.5 h-3.5" />
+        </button>
+      </div>
+
+      {/* Action buttons */}
+      <div className="grid grid-cols-2 gap-2">
+        <button
+          onClick={() => copyLink(tab)}
+          className="flex items-center justify-center gap-2 py-2.5 rounded-xl bg-white/8 border border-white/15 text-white/80 hover:text-white hover:bg-white/12 text-[13px] font-medium transition-colors"
+        >
+          <Copy className="w-3.5 h-3.5" />
+          Copy Link
+        </button>
+        <button
+          onClick={() => doShare(tab)}
+          className="flex items-center justify-center gap-2 py-2.5 rounded-xl bg-gradient-to-r from-[#e94560] to-[#c23616] text-white text-[13px] font-semibold hover:opacity-90 transition-opacity"
+        >
+          <Share2 className="w-3.5 h-3.5" />
+          {hasShare ? 'Share' : 'WhatsApp'}
+        </button>
+      </div>
+
+      <p className="text-[10px] text-white/25 mt-3 leading-relaxed">
+        When someone signs up through this link, they&apos;ll be linked to you automatically.
+      </p>
+    </div>
   );
 }

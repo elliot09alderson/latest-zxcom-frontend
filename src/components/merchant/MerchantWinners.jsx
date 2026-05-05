@@ -12,9 +12,11 @@ const fullUrl = (url) => url ? (url.startsWith('http') ? url : `${API_BASE}${url
 // Show first 4 digits, mask remaining 6 with stars: 9876******
 const maskPhone = (p) => {
   if (!p) return '';
-  const digits = p.replace(/\D/g, '');
-  if (digits.length < 5) return digits;
-  return `${digits.slice(0, 4)}${'*'.repeat(Math.max(digits.length - 4, 6))}`;
+  const s = String(p);
+  if (s.includes('*')) return s;
+  const digits = s.replace(/\D/g, '');
+  if (!digits) return '';
+  return `${digits.slice(0, 4)}${'*'.repeat(6)}`;
 };
 
 function WinnerCard({ winner, idx }) {

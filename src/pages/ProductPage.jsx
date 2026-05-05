@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { motion } from 'framer-motion';
-import { Star, Heart, ShoppingCart, Truck, Shield, RotateCcw, Check, ChevronRight, Minus, Plus, User } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Star, Heart, ShoppingCart, Truck, Shield, RotateCcw, Check, ChevronRight, Minus, Plus, User, ChevronLeft } from 'lucide-react';
 import toast from 'react-hot-toast';
 import PublicLayout from '../components/layout/PublicLayout';
 import ProductCard from '../components/ecom/ProductCard';
@@ -54,18 +54,73 @@ const mockReviews = [
   { id: 5, name: 'Vikram D.', rating: 5, date: '2 months ago', comment: 'Best t-shirt I have purchased online. Color is exactly as shown.', size: 'L' },
 ];
 
-// ── Product Image (single image, no auto-rotate) ──
-function ImageCarousel({ image, name }) {
+// ── Product Image Carousel (auto-slide every 3s, pause on hover) ──
+function ImageCarousel({ images, image, name }) {
+  const slides = (images && images.length > 0) ? images : (image ? [image] : []);
+  const [idx, setIdx] = useState(0);
+  const [paused, setPaused] = useState(false);
+  const timer = useRef(null);
+
+  const next = useCallback(() => setIdx(i => (i + 1) % slides.length), [slides.length]);
+  const prev = useCallback(() => setIdx(i => (i - 1 + slides.length) % slides.length), [slides.length]);
+
+  useEffect(() => {
+    if (slides.length <= 1 || paused) return;
+    timer.current = setInterval(next, 3000);
+    return () => clearInterval(timer.current);
+  }, [next, paused, slides.length]);
+
+  if (slides.length === 0) return null;
+
   return (
-    <div className="relative rounded-2xl overflow-hidden bg-white/5 border border-white/10 aspect-[3/4]">
-      <motion.img
-        src={image}
-        alt={name}
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.4 }}
-        className="w-full h-full object-cover"
-      />
+    <div
+      className="relative rounded-2xl overflow-hidden bg-white/5 border border-white/10 aspect-[3/4] group"
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+    >
+      <AnimatePresence mode="wait">
+        <motion.img
+          key={idx}
+          src={slides[idx]}
+          alt={`${name} ${idx + 1}`}
+          initial={{ opacity: 0, x: 30 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: -30 }}
+          transition={{ duration: 0.35 }}
+          className="w-full h-full object-cover"
+        />
+      </AnimatePresence>
+
+      {slides.length > 1 && (
+        <>
+          {/* Prev / Next arrows */}
+          <button
+            onClick={prev}
+            className="absolute left-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-black/50 text-white opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+          <button
+            onClick={next}
+            className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-black/50 text-white opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
+
+          {/* Dot indicators */}
+          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
+            {slides.map((_, i) => (
+              <button
+                key={i}
+                onClick={() => setIdx(i)}
+                className={`w-1.5 h-1.5 rounded-full transition-all cursor-pointer ${
+                  i === idx ? 'bg-white scale-125' : 'bg-white/40'
+                }`}
+              />
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -238,7 +293,7 @@ export default function ProductPage() {
             animate={{ opacity: 1, x: 0 }}
             className="lg:w-[45%] flex-shrink-0"
           >
-            <ImageCarousel image={product.image} name={product.name} />
+            <ImageCarousel images={product.images} image={product.image} name={product.name} />
 
             {/* Wishlist button below image on mobile */}
             <button

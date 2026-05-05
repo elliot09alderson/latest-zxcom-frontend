@@ -140,40 +140,38 @@ export default function PromoterProfile() {
   const displayPhone = profile?.phone || user?.phone || '';
   const employeeId = promoter?.employee_id || '';
   const referralCode = promoter?.referral_code || displayPhone;
-  const referralLink = referralCode
-    ? `${window.location.origin}/register?ref=${encodeURIComponent(referralCode)}`
-    : '';
+  const [shareTab, setShareTab] = useState('promoter');
 
-  const copyReferralLink = async () => {
-    if (!referralLink) return;
+  const getShareLinks = () => {
+    const base = window.location.origin;
+    const ref = encodeURIComponent(referralCode || '');
+    return {
+      promoter: `${base}/register?ref=${ref}`,
+      merchant: `${base}/member/register?ref=${ref}&role=merchant`,
+    };
+  };
+
+  const copyLink = async (type) => {
+    const url = getShareLinks()[type];
     try {
-      await navigator.clipboard.writeText(referralLink);
-      toast.success('Referral link copied!');
+      await navigator.clipboard.writeText(url);
+      toast.success('Link copied!');
     } catch {
       toast.error('Could not copy link');
     }
   };
 
-  const shareOnWhatsApp = () => {
-    if (!referralLink) return;
-    const msg = `Hi! I'd like to invite you to join ZXCOM as a promoter. Sign up using my referral link: ${referralLink}`;
-    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank', 'noopener');
-  };
-
-  const nativeShare = async () => {
-    if (!referralLink) return;
+  const doShare = async (type) => {
+    const url = getShareLinks()[type];
+    const isPromoterType = type === 'promoter';
+    const title = isPromoterType ? 'Join ZXCOM as a Promoter' : 'Register your shop on ZXCOM';
+    const text  = isPromoterType
+      ? "I'd like to invite you to join ZXCOM as a Promoter. Sign up using my referral link:"
+      : "Register your shop on ZXCOM using my referral link:";
     if (navigator.share) {
-      try {
-        await navigator.share({
-          title: 'Join ZXCOM as a Promoter',
-          text: `Sign up using my referral link`,
-          url: referralLink,
-        });
-      } catch {
-        // user cancelled share — ignore
-      }
+      try { await navigator.share({ title, text, url }); } catch { /* cancelled */ }
     } else {
-      copyReferralLink();
+      window.open(`https://wa.me/?text=${encodeURIComponent(`${text} ${url}`)}`, '_blank', 'noopener');
     }
   };
   const rank = promoter?.rank || 'promoter';
@@ -269,42 +267,69 @@ export default function PromoterProfile() {
 
           {/* Right column */}
           <div className="space-y-6">
-            {/* Refer a Promoter */}
+            {/* Refer / Onboard */}
             <GlassCard className="p-4 sm:p-6">
+              {/* Tab switcher */}
+              <div className="flex gap-2 mb-5">
+                {[
+                  { key: 'promoter', label: 'Promoter', Icon: UserPlus, color: 'text-[#e94560]', activeBg: 'bg-[#e94560]/15 border-[#e94560]/40' },
+                  { key: 'merchant', label: 'Merchant', Icon: Store,    color: 'text-emerald-400', activeBg: 'bg-emerald-500/15 border-emerald-400/40' },
+                ].map(({ key, label, Icon, color, activeBg }) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setShareTab(key)}
+                    className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold transition-colors border ${
+                      shareTab === key ? `${activeBg} ${color}` : 'bg-white/5 border-white/10 text-white/50 hover:text-white'
+                    }`}
+                  >
+                    <Icon className="w-4 h-4" />
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Header */}
               <div className="flex items-center gap-3 mb-4">
-                <div className="p-2.5 rounded-xl bg-gradient-to-br from-[#e94560]/20 to-[#c23616]/10">
-                  <UserPlus className="w-5 h-5 text-[#e94560]" />
+                <div className={`p-2.5 rounded-xl ${shareTab === 'promoter' ? 'bg-gradient-to-br from-[#e94560]/20 to-[#c23616]/10' : 'bg-emerald-500/15'}`}>
+                  {shareTab === 'promoter'
+                    ? <UserPlus className="w-5 h-5 text-[#e94560]" />
+                    : <Store className="w-5 h-5 text-emerald-400" />}
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-white">Refer a Promoter</h3>
+                  <h3 className="text-base font-bold text-white">
+                    {shareTab === 'promoter' ? 'Refer a Promoter' : 'Onboard a Merchant'}
+                  </h3>
                   <p className="text-xs text-white/40">
-                    Share your link — they fill the form, you grow your network.
+                    {shareTab === 'promoter'
+                      ? 'Share your link — they fill the form, you grow your network.'
+                      : 'Share your link — merchant registers and links to you.'}
                   </p>
                 </div>
               </div>
 
-              {referralLink ? (
+              {referralCode ? (
                 <>
                   <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-xl p-3 mb-4">
                     <Link2 className="w-4 h-4 text-white/40 flex-shrink-0" />
-                    <span className="text-xs text-white/70 truncate flex-1" title={referralLink}>
-                      {referralLink}
+                    <span className="text-xs text-white/70 truncate flex-1">
+                      {getShareLinks()[shareTab]}
                     </span>
                     <button
                       type="button"
-                      onClick={copyReferralLink}
+                      onClick={() => copyLink(shareTab)}
                       className="p-1.5 rounded-lg hover:bg-white/10 text-white/60 hover:text-white transition-colors cursor-pointer flex-shrink-0"
-                      aria-label="Copy referral link"
+                      aria-label="Copy link"
                     >
                       <Copy className="w-4 h-4" />
                     </button>
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
-                    <Button variant="secondary" icon={Copy} onClick={copyReferralLink} fullWidth>
+                    <Button variant="secondary" icon={Copy} onClick={() => copyLink(shareTab)} fullWidth>
                       Copy Link
                     </Button>
-                    <Button icon={Share2} onClick={typeof navigator !== 'undefined' && navigator.share ? nativeShare : shareOnWhatsApp} fullWidth>
+                    <Button icon={Share2} onClick={() => doShare(shareTab)} fullWidth>
                       {typeof navigator !== 'undefined' && navigator.share ? 'Share' : 'WhatsApp'}
                     </Button>
                   </div>

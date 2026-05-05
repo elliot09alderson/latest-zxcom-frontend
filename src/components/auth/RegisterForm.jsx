@@ -86,13 +86,14 @@ export default function RegisterForm({ defaultType }) {
   });
 
   // Deep-link handling:
-  //   /register?ref=XXX            → pre-select promoter, skip to step 2
-  //   /register (no query)         → default to shopper signup, skip step 1
-  //   /register?type=business      → show merchant/promoter tile picker
+  //   /register?ref=XXX                    → pre-select promoter, skip to step 2
+  //   /register?ref=XXX&role=merchant      → pre-select merchant, skip to step 2
+  //   /register (no query)                 → default to shopper signup, skip step 1
+  //   /register?type=business              → show merchant/promoter tile picker
   useEffect(() => {
     if (step !== 1) return;
     if (refCode) {
-      setRole('promoter');
+      setRole(searchParams.get('role') === 'merchant' ? 'merchant' : 'promoter');
       setStep(2);
       return;
     }
