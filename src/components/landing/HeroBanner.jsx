@@ -39,32 +39,8 @@ export default function HeroBanner() {
     return () => clearInterval(interval);
   }, [banners.length, next]);
 
-  // Placeholder when loading or no banners
-  if (loading || banners.length === 0) {
-    return (
-      <section className="relative w-full h-[70vh] min-h-[400px] overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-[#e94560]/20 via-[#0a0a1a] to-[#1a1a2e] flex items-center justify-center">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-            className="text-center"
-          >
-            <h1 className="text-5xl md:text-7xl font-extrabold mb-4">
-              <span className="text-white">X</span>
-              <span className="text-[#e94560]">-</span>
-              <span className="bg-gradient-to-r from-[#e94560] to-[#c23616] bg-clip-text text-transparent">
-                FLEX
-              </span>
-            </h1>
-            <p className="text-white/50 text-lg md:text-xl max-w-md mx-auto">
-              Discover campaigns, win prizes, and grow your business
-            </p>
-          </motion.div>
-        </div>
-      </section>
-    );
-  }
+  // No banners configured yet — render nothing rather than a giant placeholder.
+  if (loading || banners.length === 0) return null;
 
   const banner = banners[current];
 
