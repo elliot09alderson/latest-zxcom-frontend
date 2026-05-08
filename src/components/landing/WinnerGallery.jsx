@@ -68,13 +68,13 @@ export default function WinnerGallery() {
               {winner.photo_url || winner.avatar_url ? (
                 <img
                   src={winner.photo_url || winner.avatar_url}
-                  alt={winner.name}
+                  alt={winner.name || winner.winner_name}
                   className="w-full h-full object-cover"
                 />
               ) : (
                 <div className="w-full h-full bg-gradient-to-br from-[#e94560]/30 to-[#c23616]/20 flex items-center justify-center">
                   <span className="text-2xl font-bold text-white/60">
-                    {winner.name?.charAt(0)?.toUpperCase() || '?'}
+                    {(winner.name || winner.winner_name)?.charAt(0)?.toUpperCase() || '?'}
                   </span>
                 </div>
               )}
@@ -90,7 +90,9 @@ export default function WinnerGallery() {
           </h4>
 
           {winner.displayPhone && (
-            <p className="text-white/50 text-xs mb-1 font-mono">{winner.displayPhone}</p>
+            <p className="text-white/50 text-xs mb-1 font-mono tracking-wide">
+              {winner.displayPhone}
+            </p>
           )}
 
           {(winner.contest_name || winner.offer_title || winner.contest_id?.title) && (
