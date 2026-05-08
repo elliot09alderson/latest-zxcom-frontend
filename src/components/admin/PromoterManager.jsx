@@ -43,7 +43,15 @@ export default function PromoterManager() {
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to download ID card');
+      let msg = 'Failed to download ID card';
+      if (err.response?.data instanceof Blob) {
+        try { const t = await err.response.data.text(); msg = JSON.parse(t)?.message || msg; } catch {}
+      } else if (err.response?.data?.message) {
+        msg = err.response.data.message;
+      } else if (err.message) {
+        msg = err.message;
+      }
+      toast.error(msg);
     } finally {
       setIdCardDownloadingId(null);
     }

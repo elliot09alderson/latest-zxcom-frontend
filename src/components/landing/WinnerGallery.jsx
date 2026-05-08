@@ -86,12 +86,16 @@ export default function WinnerGallery() {
 
           {/* Winner Info */}
           <h4 className="text-white font-semibold text-sm mb-1 truncate max-w-full">
-            {winner.name || 'Winner'}
+            {winner.name || winner.winner_name || 'Winner'}
           </h4>
 
-          {(winner.contest_name || winner.offer_title) && (
+          {winner.displayPhone && (
+            <p className="text-white/50 text-xs mb-1 font-mono">{winner.displayPhone}</p>
+          )}
+
+          {(winner.contest_name || winner.offer_title || winner.contest_id?.title) && (
             <p className="text-white/40 text-xs mb-2 line-clamp-1">
-              {winner.contest_name || winner.offer_title}
+              {winner.contest_name || winner.offer_title || winner.contest_id?.title}
             </p>
           )}
 
