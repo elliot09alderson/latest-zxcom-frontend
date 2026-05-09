@@ -53,12 +53,9 @@ export default function MerchantRegisterForm() {
     shop_image: null,
   });
 
-  const [selectedPlan, setSelectedPlan] = useState(null);
+  const [selectedPack, setSelectedPack] = useState(null); // full pack object from backend
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [errors, setErrors] = useState({});
-
-  // Must match server-side `basic_plan_price` / `premium_plan_price` config.
-  const PLAN_PRICES = { basic: 1000, premium: 2500 };
 
   const handleShopChange = (e) => {
     const { name, value, files } = e.target;
@@ -148,15 +145,16 @@ export default function MerchantRegisterForm() {
     if (validateStep1()) setStep(2);
   };
 
-  const handlePlanSelect = (planType) => {
-    setSelectedPlan(planType);
+  const handlePlanSelect = (pack) => {
+    setSelectedPack(pack);
     setStep(3);
   };
 
   const postRegistration = async (paymentData) => {
     try {
       await api.post('/merchants/register', {
-        plan_type: selectedPlan,
+        plan_type: selectedPack?.name?.toLowerCase().includes('basic') ? 'basic' : 'premium',
+        pack_id: selectedPack?._id,
         shop_name: shopDetails.shop_name,
         area: shopDetails.area || undefined,
         city: shopDetails.city || undefined,
@@ -180,7 +178,7 @@ export default function MerchantRegisterForm() {
       toast.error('Please accept the Terms & Conditions to continue');
       return;
     }
-    const amount = PLAN_PRICES[selectedPlan];
+    const amount = selectedPack?.price;
     if (!amount) {
       toast.error('Invalid plan selected');
       return;
@@ -194,11 +192,10 @@ export default function MerchantRegisterForm() {
       const orderData = orderRes?.data || orderRes;
 
       await initiatePayment({
-        // /payments/create-order returns amount in rupees; Razorpay needs paise.
         amount: Math.round(Number(amount) * 100),
         order_id: orderData.order_id,
         name: 'ZXCOM',
-        description: `Merchant subscription · ${selectedPlan}`,
+        description: `Merchant subscription · ${selectedPack?.name || 'Plan'}`,
         prefill: {
           name: user?.name || '',
           email: user?.email || '',
@@ -507,8 +504,8 @@ export default function MerchantRegisterForm() {
               <div className="text-center">
                 <h2 className="text-xl font-bold text-white">Complete Payment</h2>
                 <p className="text-sm text-white/50 mt-1">
-                  Plan: <span className="text-white font-medium capitalize">{selectedPlan}</span> —{' '}
-                  <span className="text-[#e94560] font-semibold">₹{PLAN_PRICES[selectedPlan]?.toLocaleString() || '—'}</span>
+                  Plan: <span className="text-white font-medium">{selectedPack?.name}</span> —{' '}
+                  <span className="text-[#e94560] font-semibold">₹{selectedPack?.price?.toLocaleString() || '—'}</span>
                 </p>
               </div>
 
@@ -539,7 +536,7 @@ export default function MerchantRegisterForm() {
                   disabled={!termsAccepted}
                   onClick={handleSubmitRegistration}
                 >
-                  Pay ₹{PLAN_PRICES[selectedPlan]?.toLocaleString() || ''} & Activate
+                  Pay ₹{selectedPack?.price?.toLocaleString() || ''} & Activate
                 </Button>
               </div>
             </GlassCard>

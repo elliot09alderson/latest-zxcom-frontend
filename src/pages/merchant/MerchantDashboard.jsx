@@ -1,5 +1,6 @@
 import { LayoutDashboard, Users, Trophy, User } from 'lucide-react';
-import { Send, Award, Crown } from 'lucide-react';
+import { Send, Award, Crown, ArrowRight } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import useFetch from '../../hooks/useFetch';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import StatsCard from '../../components/ui/StatsCard';
@@ -21,6 +22,7 @@ const sidebarLinks = [
 
 export default function MerchantDashboard() {
   const { data, loading, error, refetch } = useFetch('/merchants/stats');
+  const navigate = useNavigate();
 
   const stats = data || {};
 
@@ -33,8 +35,20 @@ export default function MerchantDashboard() {
             <Spinner size="lg" />
           </div>
         ) : error ? (
-          <div className="text-center py-8">
-            <p className="text-sm text-red-400">{error}</p>
+          <div className="text-center py-16 space-y-4">
+            {error?.toLowerCase().includes('not found') ? (
+              <>
+                <p className="text-white/60 text-sm">Your merchant account isn&apos;t set up yet.</p>
+                <button
+                  onClick={() => navigate('/merchant/setup')}
+                  className="inline-flex items-center gap-2 px-6 py-3 bg-[#e94560] hover:bg-[#e94560]/90 text-white text-sm font-semibold rounded-xl transition-colors cursor-pointer"
+                >
+                  Complete Setup <ArrowRight className="w-4 h-4" />
+                </button>
+              </>
+            ) : (
+              <p className="text-sm text-red-400">{error}</p>
+            )}
           </div>
         ) : (
           <>

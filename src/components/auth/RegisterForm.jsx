@@ -260,8 +260,8 @@ export default function RegisterForm({ defaultType }) {
         toast.success('Registration successful! You are now an active promoter.');
       } else if (role === 'merchant') {
         await uploadAvatar(token);
-        toast.success('Account created successfully!');
-        navigate('/merchant');
+        toast.success('Account created! Now set up your shop and choose a plan.');
+        navigate('/merchant/setup');
       } else {
         await uploadAvatar(token);
         toast.success('Welcome! Happy shopping.');

@@ -32,6 +32,7 @@ import MerchantDashboard from './pages/merchant/MerchantDashboard';
 import MerchantCustomers from './pages/merchant/MerchantCustomers';
 import MerchantWinnersPage from './pages/merchant/MerchantWinnersPage';
 import MerchantProfile from './pages/merchant/MerchantProfile';
+import MerchantSetupPage from './pages/merchant/MerchantSetupPage';
 
 // Promoter pages
 import PromoterDashboard from './pages/promoter/PromoterDashboard';
@@ -113,6 +114,7 @@ function App() {
       <Route path="/refund" element={<RefundPage />} />
 
       {/* Merchant routes */}
+      <Route path="/merchant/setup" element={<ProtectedRoute roles={['merchant']}><MerchantSetupPage /></ProtectedRoute>} />
       <Route path="/merchant" element={<ProtectedRoute roles={['merchant']}><MerchantDashboard /></ProtectedRoute>} />
       <Route path="/merchant/customers" element={<ProtectedRoute roles={['merchant']}><MerchantCustomers /></ProtectedRoute>} />
       <Route path="/merchant/winners" element={<ProtectedRoute roles={['merchant']}><MerchantWinnersPage /></ProtectedRoute>} />
