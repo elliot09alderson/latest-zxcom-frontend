@@ -9,11 +9,22 @@ import EmptyState from '../ui/EmptyState';
 const API_BASE = import.meta.env.VITE_API_URL?.replace('/api', '') || '';
 const fullUrl = (url) => url ? (url.startsWith('http') ? url : `${API_BASE}${url}`) : '';
 
+// Show first 4 digits, mask remaining 6 with stars: 9876******
+const maskPhone = (p) => {
+  if (!p) return '';
+  const s = String(p);
+  if (s.includes('*')) return s;
+  const digits = s.replace(/\D/g, '');
+  if (!digits) return '';
+  return `${digits.slice(0, 4)}${'*'.repeat(6)}`;
+};
+
 function WinnerCard({ winner, idx }) {
-  const name = winner.customer_id?.name || winner.customer_name || winner.name || 'Winner';
-  const phone = winner.customer_id?.phone || winner.phone || '';
+  const name = winner.winner_name || winner.customer_id?.name || winner.promoter_id?.name || winner.merchant_id?.name || 'Winner';
+  const phone = maskPhone(winner.winner_phone || winner.customer_id?.phone || winner.promoter_id?.phone || winner.merchant_id?.phone || '');
   const photo = fullUrl(winner.customer_id?.profile_photo_url || '');
-  const contest = winner.contest_id?.title || winner.contest_name || winner.contest || 'Contest';
+  const contest = winner.contest_id?.title || winner.contest_name || winner.contest || winner.prize || 'Contest';
+  const prize = winner.prize_value || winner.contest_id?.prize_amount || winner.prize_amount || 0;
   const date = winner.selected_at || winner.date || winner.createdAt;
 
   return (
@@ -49,12 +60,17 @@ function WinnerCard({ winner, idx }) {
         </div>
       </div>
 
-      <div className="flex items-center gap-1.5 mt-4 pt-3 border-t border-white/5">
-        <Calendar className="w-3 h-3 text-white/30" />
-        <span className="text-xs text-white/40">
-          {date
-            ? new Date(date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
-            : '--'}
+      <div className="flex items-center justify-between mt-4 pt-3 border-t border-white/5">
+        <div className="flex items-center gap-1.5">
+          <Calendar className="w-3 h-3 text-white/30" />
+          <span className="text-xs text-white/40">
+            {date
+              ? new Date(date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+              : '--'}
+          </span>
+        </div>
+        <span className={`text-xs font-semibold ${prize > 0 ? 'text-amber-400' : 'text-white/20'}`}>
+          {prize > 0 ? `₹${prize.toLocaleString('en-IN')}` : 'No prize'}
         </span>
       </div>
     </motion.div>
@@ -68,13 +84,11 @@ const tabs = [
 
 export default function MerchantWinners() {
   const [active, setActive] = useState('my');
-  const { data: myData, loading: myLoading } = useFetch('/merchants/winners');
-  const { data: globalData, loading: globalLoading } = useFetch('/public/winners');
+  const { data, loading } = useFetch('/merchants/winners');
 
-  const myWinners = myData?.winners || [];
-  const globalWinners = globalData?.winners || [];
+  const myWinners = data?.winners || [];
+  const globalWinners = data?.all_winners || [];
   const winners = active === 'my' ? myWinners : globalWinners;
-  const loading = active === 'my' ? myLoading : globalLoading;
 
   return (
     <div className="space-y-5">

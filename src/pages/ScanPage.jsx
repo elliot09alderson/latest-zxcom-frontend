@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   AlertTriangle, XCircle, ShieldOff, CalendarOff,
-  PartyPopper, Trophy, Sparkles, Gift,
+  Ticket, Sparkles, BadgePercent,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../config/api';
@@ -50,24 +50,8 @@ function ErrorScreen({ type, message }) {
 }
 
 // ─── Success Screen ─────────────────────────────────────────────
-function SuccessScreen({ merchantName, phone, name }) {
-  const [countdown, setCountdown] = useState(3);
+function SuccessScreen({ merchantName }) {
   const confettiColors = ['#e94560', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316'];
-
-  useEffect(() => {
-    if (!phone) return;
-    const interval = setInterval(() => {
-      setCountdown((c) => {
-        if (c <= 1) {
-          clearInterval(interval);
-          const url = `https://zxmoney.in/${phone}${name ? `?name=${encodeURIComponent(name)}` : ''}`;
-          window.location.href = url;
-        }
-        return c - 1;
-      });
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [phone, name]);
 
   return (
     <div className="relative w-full max-w-md mx-auto overflow-hidden">
@@ -85,13 +69,13 @@ function SuccessScreen({ merchantName, phone, name }) {
             className="w-20 h-20 rounded-full bg-gradient-to-br from-[#e94560] to-[#c23616] flex items-center justify-center"
           >
             <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.6, type: 'spring', stiffness: 300 }}>
-              <PartyPopper className="w-9 h-9 text-white" />
+              <Ticket className="w-9 h-9 text-white" />
             </motion.div>
           </motion.div>
         </motion.div>
 
         <motion.h1 initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }} className="text-2xl sm:text-3xl font-extrabold text-white mb-2">
-          You're in the draw!
+          Your Offer Card is Ready!
         </motion.h1>
 
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.65 }} className="flex items-center justify-center gap-2 mb-5">
@@ -109,19 +93,14 @@ function SuccessScreen({ merchantName, phone, name }) {
 
         <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 1 }} className="p-3 rounded-xl bg-gradient-to-r from-[#e94560]/15 to-[#f59e0b]/15 border border-[#e94560]/20">
           <div className="flex items-center justify-center gap-2">
-            <Gift className="w-4 h-4 text-[#e94560]" />
-            <span className="text-sm font-medium text-white/80">Winners will be announced soon. Good luck!</span>
+            <BadgePercent className="w-4 h-4 text-[#e94560]" />
+            <span className="text-sm font-medium text-white/80">Get exclusive offers &amp; deals on your card</span>
           </div>
         </motion.div>
 
-        {phone && (
-          <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1.3 }} className="mt-5 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
-            <p className="text-xs text-emerald-300/80">
-              Setting up your <span className="font-semibold text-emerald-300">ZXMoney</span> wallet in{' '}
-              <span className="font-bold text-white">{countdown}s</span> — verify your phone to track entries &amp; earn ₹1000 welcome bonus
-            </p>
-          </motion.div>
-        )}
+        <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.2 }} className="text-xs text-white/30 mt-5">
+          Redirecting you to zx.money…
+        </motion.p>
       </GlassCard>
     </div>
   );
@@ -141,7 +120,6 @@ export default function ScanPage() {
   const [step, setStep] = useState(1); // 1: form, 2: success
   const [submitLoading, setSubmitLoading] = useState(false);
   const [submittedPhone, setSubmittedPhone] = useState('');
-  const [submittedName, setSubmittedName] = useState('');
 
   useEffect(() => {
     const fetchQRData = async () => {
@@ -187,9 +165,11 @@ export default function ScanPage() {
 
       await api.post('/customers/submit', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
       setSubmittedPhone(formData.phone);
-      setSubmittedName(formData.name || '');
       setStep(2);
       toast.success('Entry submitted successfully!');
+      setTimeout(() => {
+        window.location.href = `https://zxmoney.in/${formData.phone}?name=${encodeURIComponent(formData.name || '')}`;
+      }, 2000);
     } catch (err) {
       toast.error(err.response?.data?.message || 'Submission failed. Please try again.');
     } finally {
@@ -236,7 +216,7 @@ export default function ScanPage() {
                 />
               )}
               {step === 2 && (
-                <SuccessScreen merchantName={merchantInfo?.shop_name} phone={submittedPhone} name={submittedName} />
+                <SuccessScreen merchantName={merchantInfo?.shop_name} phone={submittedPhone} />
               )}
             </motion.div>
           )}

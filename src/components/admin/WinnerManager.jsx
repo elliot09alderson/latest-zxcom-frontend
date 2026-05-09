@@ -85,31 +85,46 @@ export default function WinnerManager() {
     }
   };
 
+  const getWinnerName = (row) =>
+    row.winner_name || row.customer_id?.name || row.promoter_id?.name || row.merchant_id?.name || 'Unknown';
+  const getWinnerPhone = (row) =>
+    row.winner_phone || row.customer_id?.phone || row.promoter_id?.phone || row.merchant_id?.phone || '-';
+
   const columns = [
     {
       key: 'name',
       label: 'Winner Name',
-      render: (val, row) => val || row.winner_name || '-',
+      render: (_, row) => getWinnerName(row),
     },
     {
       key: 'phone',
       label: 'Phone',
-      render: (val, row) => val || row.winner_phone || '-',
+      render: (_, row) => getWinnerPhone(row),
     },
     {
       key: 'contest_title',
       label: 'Contest',
-      render: (val, row) => val || row.contest?.title || '-',
+      render: (val, row) => row.contest_id?.title || val || '-',
     },
     {
       key: 'prize',
-      label: 'Prize',
-      render: (val, row) => val || row.prize_description || '-',
+      label: 'Contest / Prize',
+      render: (val, row) => (
+        <div>
+          <p className="text-sm text-white">{val || row.contest_id?.title || '-'}</p>
+          {row.prize_value > 0 && (
+            <p className="text-xs text-amber-400 font-semibold">₹{row.prize_value.toLocaleString('en-IN')}</p>
+          )}
+        </div>
+      ),
     },
     {
       key: 'selected_at',
       label: 'Selected Date',
-      render: (val) => val ? new Date(val).toLocaleDateString('en-IN') : '-',
+      render: (val, row) => {
+        const d = val || row.createdAt;
+        return d ? new Date(d).toLocaleDateString('en-IN') : '-';
+      },
     },
     {
       key: 'published',

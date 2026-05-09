@@ -1,45 +1,10 @@
-import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Store, MapPin, CheckCircle } from 'lucide-react';
-import api from '../../config/api';
 import CustomerForm from './CustomerForm';
 
 export default function ScanLanding({ merchantInfo, qrData, onFormSubmit, formLoading }) {
-  const [offerBanner, setOfferBanner] = useState(null);
-
-  useEffect(() => {
-    api.get('/public/customer-form-banner').then((res) => {
-      setOfferBanner(res.data?.data?.banner || null);
-    }).catch(() => {});
-  }, []);
-
   return (
     <div className="w-full max-w-lg mx-auto space-y-4">
-      {/* Offer Banner — shown when admin uploads a customer_form banner */}
-      {offerBanner && (
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="rounded-2xl overflow-hidden border border-[#e94560]/30"
-        >
-          <img
-            src={offerBanner.image_url}
-            alt={offerBanner.title || 'Offer'}
-            className="w-full object-cover max-h-52"
-          />
-          {(offerBanner.title || offerBanner.caption) && (
-            <div className="bg-[#e94560]/10 px-4 py-3">
-              {offerBanner.title && (
-                <p className="text-sm font-semibold text-white">{offerBanner.title}</p>
-              )}
-              {offerBanner.caption && (
-                <p className="text-xs text-white/50 mt-0.5">{offerBanner.caption}</p>
-              )}
-            </div>
-          )}
-        </motion.div>
-      )}
-
       {/* Compact merchant banner */}
       <motion.div
         initial={{ opacity: 0, y: -10 }}

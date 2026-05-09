@@ -46,18 +46,6 @@ export default function MemberRegisterPage() {
           />
         ))}
         <div className="relative z-10 w-full max-w-lg">
-          {/* ZXMoney cross-registration hint */}
-          <motion.div
-            initial={{ opacity: 0, y: -8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4 }}
-            className="mb-4 flex items-center gap-3 px-4 py-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/20"
-          >
-            <span className="text-lg">💡</span>
-            <p className="text-xs text-emerald-200/80 leading-relaxed">
-              Already on <span className="font-semibold text-emerald-300">ZXMoney</span>? Use your same phone number and password — no new signup needed.
-            </p>
-          </motion.div>
           {/* defaultType='business' surfaces the merchant/promoter role picker */}
           <RegisterForm defaultType="business" />
         </div>

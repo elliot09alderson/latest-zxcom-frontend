@@ -113,7 +113,7 @@ export default function BannerManager() {
         </div>
         <div>
           <h2 className="text-xl font-bold text-white">Dashboard Banners</h2>
-          <p className="text-xs text-white/40">Push offer announcements to merchants, promoters and customer form</p>
+          <p className="text-xs text-white/40">Push offer announcements to merchants and promoters</p>
         </div>
       </div>
 
@@ -130,7 +130,6 @@ export default function BannerManager() {
             {Object.entries(AUDIENCE_META).map(([key, meta]) => {
               const Icon = meta.icon;
               const selected = audience === key;
-              const displayLabel = key === 'customer_form' ? 'Customer Form' : `${meta.label} Dashboard`;
               return (
                 <button
                   key={key}
@@ -143,7 +142,7 @@ export default function BannerManager() {
                   }`}
                 >
                   <Icon className="w-5 h-5" />
-                  <span className="text-sm font-semibold">{displayLabel}</span>
+                  <span className="text-sm font-semibold">{key === 'customer_form' ? 'Customer Form' : `${meta.label} Dashboard`}</span>
                 </button>
               );
             })}
