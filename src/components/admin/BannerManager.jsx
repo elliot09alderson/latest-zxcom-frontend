@@ -113,7 +113,7 @@ export default function BannerManager() {
         </div>
         <div>
           <h2 className="text-xl font-bold text-white">Dashboard Banners</h2>
-          <p className="text-xs text-white/40">Push offer announcements to merchants and promoters</p>
+          <p className="text-xs text-white/40">Push offer announcements to merchants, promoters and customer form</p>
         </div>
       </div>
 
