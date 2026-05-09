@@ -117,8 +117,8 @@ function SuccessScreen({ merchantName, phone, name }) {
         {phone && (
           <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1.3 }} className="mt-5 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
             <p className="text-xs text-emerald-300/80">
-              Redirecting to <span className="font-semibold text-emerald-300">ZXMoney</span> in{' '}
-              <span className="font-bold text-white">{countdown}s</span> to track your entries &amp; earn rewards
+              Setting up your <span className="font-semibold text-emerald-300">ZXMoney</span> wallet in{' '}
+              <span className="font-bold text-white">{countdown}s</span> — verify your phone to track entries &amp; earn ₹1000 welcome bonus
             </p>
           </motion.div>
         )}
