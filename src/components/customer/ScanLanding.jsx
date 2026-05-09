@@ -1,10 +1,43 @@
+import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Store, MapPin, CheckCircle } from 'lucide-react';
 import CustomerForm from './CustomerForm';
+import api from '../../config/api';
 
 export default function ScanLanding({ merchantInfo, qrData, onFormSubmit, formLoading }) {
+  const [banner, setBanner] = useState(null);
+
+  useEffect(() => {
+    api.get('/public/customer-form-banner')
+      .then(({ data }) => setBanner(data.data?.banner || data.banner || null))
+      .catch(() => {});
+  }, []);
+
   return (
     <div className="w-full max-w-lg mx-auto space-y-4">
+      {/* Customer-form banner */}
+      {banner && (
+        <motion.div
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="rounded-2xl overflow-hidden border border-white/10"
+        >
+          {banner.link_url ? (
+            <a href={banner.link_url} target="_blank" rel="noopener noreferrer">
+              <img src={banner.image_url} alt={banner.title || 'Offer'} className="w-full object-cover max-h-48" />
+            </a>
+          ) : (
+            <img src={banner.image_url} alt={banner.title || 'Offer'} className="w-full object-cover max-h-48" />
+          )}
+          {(banner.title || banner.caption) && (
+            <div className="px-4 py-3 bg-white/[0.03]">
+              {banner.title && <p className="text-sm font-semibold text-white">{banner.title}</p>}
+              {banner.caption && <p className="text-xs text-white/50 mt-0.5">{banner.caption}</p>}
+            </div>
+          )}
+        </motion.div>
+      )}
+
       {/* Compact merchant banner */}
       <motion.div
         initial={{ opacity: 0, y: -10 }}
