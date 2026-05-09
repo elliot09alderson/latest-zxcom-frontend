@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Image, Trash2, Upload, Store, Users, Eye, EyeOff, Link as LinkIcon } from 'lucide-react';
+import { Image, Trash2, Upload, Store, Users, Eye, EyeOff, Link as LinkIcon, QrCode } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../config/api';
 import useFetch from '../../hooks/useFetch';
@@ -15,6 +15,7 @@ import Modal from '../ui/Modal';
 const AUDIENCE_META = {
   merchant: { label: 'Merchant', icon: Store, color: 'text-[#e94560]', bg: 'bg-[#e94560]/10 border-[#e94560]/30' },
   promoter: { label: 'Promoter', icon: Users, color: 'text-[#6366f1]', bg: 'bg-[#6366f1]/10 border-[#6366f1]/30' },
+  customer_form: { label: 'Customer Form', icon: QrCode, color: 'text-[#10b981]', bg: 'bg-[#10b981]/10 border-[#10b981]/30' },
 };
 
 export default function BannerManager() {
@@ -34,6 +35,7 @@ export default function BannerManager() {
   const counts = {
     merchant: banners.filter((b) => b.audience === 'merchant').length,
     promoter: banners.filter((b) => b.audience === 'promoter').length,
+    customer_form: banners.filter((b) => b.audience === 'customer_form').length,
   };
 
   const handleFileChange = (e) => {
@@ -124,10 +126,11 @@ export default function BannerManager() {
         {/* Audience selector */}
         <div className="mb-4">
           <label className="block text-xs font-medium text-white/70 mb-2">Target Audience</label>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {Object.entries(AUDIENCE_META).map(([key, meta]) => {
               const Icon = meta.icon;
               const selected = audience === key;
+              const displayLabel = key === 'customer_form' ? 'Customer Form' : `${meta.label} Dashboard`;
               return (
                 <button
                   key={key}
@@ -140,7 +143,7 @@ export default function BannerManager() {
                   }`}
                 >
                   <Icon className="w-5 h-5" />
-                  <span className="text-sm font-semibold">{meta.label} Dashboard</span>
+                  <span className="text-sm font-semibold">{displayLabel}</span>
                 </button>
               );
             })}
@@ -198,6 +201,7 @@ export default function BannerManager() {
           { key: 'all', label: `All (${banners.length})` },
           { key: 'merchant', label: `Merchant (${counts.merchant})` },
           { key: 'promoter', label: `Promoter (${counts.promoter})` },
+          { key: 'customer_form', label: `Customer Form (${counts.customer_form})` },
         ].map((tab) => (
           <button
             key={tab.key}

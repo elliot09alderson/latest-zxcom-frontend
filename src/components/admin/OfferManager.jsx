@@ -22,6 +22,7 @@ const initialForm = {
   end_date: '',
   area_filter: '',
   banner: null,
+  existing_banner_url: '',
 };
 
 export default function OfferManager() {
@@ -59,6 +60,7 @@ export default function OfferManager() {
       end_date: offer.end_date?.slice(0, 10) || '',
       area_filter: Array.isArray(offer.area_filter) ? offer.area_filter.join(', ') : (offer.area_filter || ''),
       banner: null,
+      existing_banner_url: offer.banner_image_url || '',
     });
     setModalOpen(true);
   };
@@ -147,6 +149,14 @@ export default function OfferManager() {
   };
 
   const columns = [
+    {
+      key: 'banner_image_url',
+      label: 'Banner',
+      exportable: false,
+      render: (val) => val
+        ? <img src={val} alt="banner" className="w-14 h-9 rounded-lg object-cover border border-white/10" />
+        : <span className="text-white/20 text-xs">—</span>,
+    },
     { key: 'title', label: 'Title' },
     {
       key: 'prize_value',
@@ -294,8 +304,19 @@ export default function OfferManager() {
             onChange={handleChange}
             placeholder="e.g. Mumbai, Delhi"
           />
+          {form.existing_banner_url && !form.banner && (
+            <div className="space-y-1.5">
+              <p className="text-sm font-medium text-white/80">Current Banner</p>
+              <img
+                src={form.existing_banner_url}
+                alt="Current banner"
+                className="w-full rounded-xl object-cover max-h-40 border border-white/10"
+              />
+              <p className="text-xs text-white/40">Upload a new image below to replace it</p>
+            </div>
+          )}
           <FileUpload
-            label="Banner Image"
+            label={form.existing_banner_url ? 'Replace Banner Image' : 'Banner Image'}
             name="banner"
             accept="image/*"
             preview
