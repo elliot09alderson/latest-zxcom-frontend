@@ -50,8 +50,24 @@ function ErrorScreen({ type, message }) {
 }
 
 // ─── Success Screen ─────────────────────────────────────────────
-function SuccessScreen({ merchantName }) {
+function SuccessScreen({ merchantName, phone, name }) {
+  const [countdown, setCountdown] = useState(3);
   const confettiColors = ['#e94560', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316'];
+
+  useEffect(() => {
+    if (!phone) return;
+    const interval = setInterval(() => {
+      setCountdown((c) => {
+        if (c <= 1) {
+          clearInterval(interval);
+          const url = `https://zxmoney.in/${phone}${name ? `?name=${encodeURIComponent(name)}` : ''}`;
+          window.location.href = url;
+        }
+        return c - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [phone, name]);
 
   return (
     <div className="relative w-full max-w-md mx-auto overflow-hidden">
@@ -98,9 +114,14 @@ function SuccessScreen({ merchantName }) {
           </div>
         </motion.div>
 
-        <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.2 }} className="text-xs text-white/30 mt-5">
-          You can close this page now
-        </motion.p>
+        {phone && (
+          <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1.3 }} className="mt-5 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+            <p className="text-xs text-emerald-300/80">
+              Redirecting to <span className="font-semibold text-emerald-300">ZXMoney</span> in{' '}
+              <span className="font-bold text-white">{countdown}s</span> to track your entries &amp; earn rewards
+            </p>
+          </motion.div>
+        )}
       </GlassCard>
     </div>
   );
@@ -119,6 +140,8 @@ export default function ScanPage() {
 
   const [step, setStep] = useState(1); // 1: form, 2: success
   const [submitLoading, setSubmitLoading] = useState(false);
+  const [submittedPhone, setSubmittedPhone] = useState('');
+  const [submittedName, setSubmittedName] = useState('');
 
   useEffect(() => {
     const fetchQRData = async () => {
@@ -163,6 +186,8 @@ export default function ScanPage() {
       if (formData.bill_image) fd.append('bill_image', formData.bill_image);
 
       await api.post('/customers/submit', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      setSubmittedPhone(formData.phone);
+      setSubmittedName(formData.name || '');
       setStep(2);
       toast.success('Entry submitted successfully!');
     } catch (err) {
@@ -211,7 +236,7 @@ export default function ScanPage() {
                 />
               )}
               {step === 2 && (
-                <SuccessScreen merchantName={merchantInfo?.shop_name} />
+                <SuccessScreen merchantName={merchantInfo?.shop_name} phone={submittedPhone} name={submittedName} />
               )}
             </motion.div>
           )}
