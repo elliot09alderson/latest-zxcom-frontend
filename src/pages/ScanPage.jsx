@@ -163,7 +163,7 @@ export default function ScanPage() {
       if (formData.profile_photo) fd.append('profile_photo', formData.profile_photo);
       if (formData.bill_image) fd.append('bill_image', formData.bill_image);
 
-      await api.post('/customers/submit', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      await api.post('/customers/submit', fd);
       setSubmittedPhone(formData.phone);
       setStep(2);
       toast.success('Entry submitted successfully!');
