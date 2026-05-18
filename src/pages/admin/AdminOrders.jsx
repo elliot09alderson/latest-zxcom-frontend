@@ -5,8 +5,7 @@ import {
   Package, UserCheck, Wallet, ShoppingBag, Truck, X, Eye, RefreshCw, Send,
   MapPin, Phone, IndianRupee, ExternalLink, Ban, ShoppingCart, DollarSign,
   Clock, CheckCircle2, TrendingUp, Receipt,
-  Repeat,
-  Crown,
+  Repeat, Crown, Download, Loader2, Scale, Check,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../config/api';
@@ -82,6 +81,13 @@ export default function AdminOrders() {
   const [stats, setStats] = useState(null);
   const [statsLoading, setStatsLoading] = useState(false);
   const [statsDays, setStatsDays] = useState(30);
+
+  // NimbusPost push modal state
+  const [pushModal, setPushModal] = useState(null);
+  const [pushDims, setPushDims] = useState({ weight: 0.5, length: 25, breadth: 20, height: 3 });
+  const [serviceResults, setServiceResults] = useState(null);
+  const [serviceLoading, setServiceLoading] = useState(false);
+  const [selectedCourier, setSelectedCourier] = useState('');
 
   const fetchOrders = async () => {
     try {
@@ -226,6 +232,62 @@ export default function AdminOrders() {
     }
   };
 
+  const openPushModal = (order) => {
+    setPushModal(order);
+    setPushDims({
+      weight: order.package_weight || 0.5,
+      length: order.package_length || 25,
+      breadth: order.package_breadth || 20,
+      height: order.package_height || 3,
+    });
+    setServiceResults(null);
+    setSelectedCourier('');
+  };
+
+  const checkRates = async () => {
+    if (!pushModal) return;
+    setServiceLoading(true);
+    setServiceResults(null);
+    try {
+      const res = await api.post('/admin/nimbuspost/serviceability', {
+        destination_pincode: pushModal.shipping_address?.pincode,
+        weight: pushDims.weight,
+        payment_type: pushModal.payment_method === 'cod' ? 'cod' : 'prepaid',
+        order_amount: pushModal.total,
+      });
+      const couriers = res.data?.data?.couriers;
+      setServiceResults(Array.isArray(couriers) ? couriers : []);
+      if (!couriers?.length) toast('No couriers available for this route', { icon: '⚠️' });
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Rate check failed');
+    } finally {
+      setServiceLoading(false);
+    }
+  };
+
+  const confirmPush = async () => {
+    if (!pushModal) return;
+    setBusy(true);
+    try {
+      await api.post(`/admin/orders/${pushModal._id}/nimbuspost/push`, {
+        package_weight: pushDims.weight,
+        package_length: pushDims.length,
+        package_breadth: pushDims.breadth,
+        package_height: pushDims.height,
+        ...(selectedCourier ? { courier_id: selectedCourier } : {}),
+      });
+      toast.success('Order pushed to NimbusPost');
+      const orderId = pushModal._id;
+      setPushModal(null);
+      await refreshOrder(orderId);
+      await fetchOrders();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'NimbusPost push failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const filtered = orders
     .filter((o) => filterStatus === 'all' || o.status === filterStatus)
     .filter((o) => {
@@ -344,12 +406,22 @@ export default function AdminOrders() {
                       <Badge text={o.status} variant={STATUS_VARIANT[o.status] || 'info'} />
                       {o.shiprocket?.awb_code && (
                         <span className="text-[11px] px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300">
-                          AWB {o.shiprocket.awb_code}
+                          SR {o.shiprocket.awb_code}
                         </span>
                       )}
                       {o.shiprocket?.order_id && !o.shiprocket?.awb_code && (
                         <span className="text-[11px] px-2 py-0.5 rounded bg-blue-500/15 text-blue-300">
                           Shiprocket
+                        </span>
+                      )}
+                      {o.nimbuspost?.awb_code && (
+                        <span className="text-[11px] px-2 py-0.5 rounded bg-indigo-500/15 text-indigo-300">
+                          NP {o.nimbuspost.awb_code}
+                        </span>
+                      )}
+                      {o.nimbuspost?.order_id && !o.nimbuspost?.awb_code && (
+                        <span className="text-[11px] px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-400">
+                          NimbusPost
                         </span>
                       )}
                     </div>
@@ -490,12 +562,20 @@ export default function AdminOrders() {
                       {detail.shiprocket.shipment_id && <p>Shipment: <span className="text-white/80">{detail.shiprocket.shipment_id}</span></p>}
                       {detail.shiprocket.awb_code && <p>AWB: <span className="text-white/80">{detail.shiprocket.awb_code}</span></p>}
                       {detail.shiprocket.courier_name && <p>Courier: <span className="text-white/80">{detail.shiprocket.courier_name}</span></p>}
-                      {detail.shiprocket.tracking_url && (
-                        <a href={detail.shiprocket.tracking_url} target="_blank" rel="noreferrer"
-                          className="inline-flex items-center gap-1 text-[#e94560] hover:underline">
-                          Track shipment <ExternalLink className="w-3 h-3" />
-                        </a>
-                      )}
+                      <div className="flex flex-wrap gap-3 pt-0.5">
+                        {detail.shiprocket.tracking_url && (
+                          <a href={detail.shiprocket.tracking_url} target="_blank" rel="noreferrer"
+                            className="inline-flex items-center gap-1 text-[#e94560] hover:underline">
+                            Track shipment <ExternalLink className="w-3 h-3" />
+                          </a>
+                        )}
+                        {detail.shiprocket.label_url && (
+                          <a href={detail.shiprocket.label_url} target="_blank" rel="noreferrer"
+                            className="inline-flex items-center gap-1 text-emerald-400 hover:underline">
+                            <Download className="w-3 h-3" /> Download Label
+                          </a>
+                        )}
+                      </div>
                     </div>
                   ) : (
                     <p className="text-xs text-white/40">Not yet sent to Shiprocket.</p>
@@ -534,21 +614,30 @@ export default function AdminOrders() {
                   {detail.nimbuspost?.order_id || detail.nimbuspost?.awb_code ? (
                     <div className="text-xs text-white/60 space-y-1">
                       {detail.nimbuspost.order_id && <p>NP Order: <span className="text-white/80">{detail.nimbuspost.order_id}</span></p>}
+                      {detail.nimbuspost.shipment_id && <p>Shipment: <span className="text-white/80">{detail.nimbuspost.shipment_id}</span></p>}
                       {detail.nimbuspost.awb_code && <p>AWB: <span className="text-white/80">{detail.nimbuspost.awb_code}</span></p>}
                       {detail.nimbuspost.courier_name && <p>Courier: <span className="text-white/80">{detail.nimbuspost.courier_name}</span></p>}
-                      {detail.nimbuspost.tracking_url && (
-                        <a href={detail.nimbuspost.tracking_url} target="_blank" rel="noreferrer"
-                          className="inline-flex items-center gap-1 text-[#6366f1] hover:underline">
-                          Track shipment <ExternalLink className="w-3 h-3" />
-                        </a>
-                      )}
+                      <div className="flex flex-wrap gap-3 pt-0.5">
+                        {detail.nimbuspost.tracking_url && (
+                          <a href={detail.nimbuspost.tracking_url} target="_blank" rel="noreferrer"
+                            className="inline-flex items-center gap-1 text-[#6366f1] hover:underline">
+                            Track shipment <ExternalLink className="w-3 h-3" />
+                          </a>
+                        )}
+                        {detail.nimbuspost.label_url && (
+                          <a href={detail.nimbuspost.label_url} target="_blank" rel="noreferrer"
+                            className="inline-flex items-center gap-1 text-emerald-400 hover:underline">
+                            <Download className="w-3 h-3" /> Download Label
+                          </a>
+                        )}
+                      </div>
                     </div>
                   ) : (
                     <p className="text-xs text-white/40">Not yet sent to NimbusPost.</p>
                   )}
                   <div className="flex flex-wrap gap-2 pt-1">
                     {!detail.nimbuspost?.order_id && !detail.nimbuspost?.awb_code && (
-                      <Button icon={Send} loading={busy} onClick={() => pushNimbus(detail._id)}
+                      <Button icon={Send} loading={busy} onClick={() => openPushModal(detail)}
                         disabled={detail.status === 'pending' || !!detail.shiprocket?.order_id}>
                         Push to NimbusPost
                       </Button>
@@ -589,6 +678,155 @@ export default function AdminOrders() {
                     ))}
                   </div>
                 </section>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* NimbusPost Push Modal */}
+      <AnimatePresence>
+        {pushModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/75 z-[60] flex items-center justify-center p-4"
+            onClick={() => !busy && setPushModal(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              transition={{ type: 'spring', damping: 24, stiffness: 260 }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-md bg-[#12132a] rounded-2xl border border-white/10 overflow-hidden"
+            >
+              {/* Header */}
+              <div className="px-5 py-4 border-b border-white/10 flex items-center justify-between">
+                <div>
+                  <p className="text-white font-semibold">Push to NimbusPost</p>
+                  <p className="text-xs text-white/40 mt-0.5">{pushModal.order_number} · {pushModal.shipping_address?.pincode}</p>
+                </div>
+                <button onClick={() => !busy && setPushModal(null)} className="p-1.5 rounded-lg hover:bg-white/10 text-white/50 cursor-pointer">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="p-5 space-y-5">
+                {/* Package dimensions */}
+                <div>
+                  <p className="text-xs text-[#6366f1] font-semibold uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                    <Scale className="w-3.5 h-3.5" /> Package Dimensions
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <label className="block">
+                      <span className="text-xs text-white/50 mb-1 block">Weight (kg)</span>
+                      <input
+                        type="number" min="0.1" step="0.1"
+                        value={pushDims.weight}
+                        onChange={(e) => setPushDims((d) => ({ ...d, weight: e.target.value }))}
+                        className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-[#6366f1]/60"
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="text-xs text-white/50 mb-1 block">Length (cm)</span>
+                      <input
+                        type="number" min="1" step="1"
+                        value={pushDims.length}
+                        onChange={(e) => setPushDims((d) => ({ ...d, length: e.target.value }))}
+                        className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-[#6366f1]/60"
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="text-xs text-white/50 mb-1 block">Breadth (cm)</span>
+                      <input
+                        type="number" min="1" step="1"
+                        value={pushDims.breadth}
+                        onChange={(e) => setPushDims((d) => ({ ...d, breadth: e.target.value }))}
+                        className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-[#6366f1]/60"
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="text-xs text-white/50 mb-1 block">Height (cm)</span>
+                      <input
+                        type="number" min="1" step="1"
+                        value={pushDims.height}
+                        onChange={(e) => setPushDims((d) => ({ ...d, height: e.target.value }))}
+                        className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-[#6366f1]/60"
+                      />
+                    </label>
+                  </div>
+                  <button
+                    onClick={checkRates}
+                    disabled={serviceLoading}
+                    className="mt-3 w-full flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-sm text-white/70 hover:bg-white/10 hover:text-white transition-colors cursor-pointer disabled:opacity-50"
+                  >
+                    {serviceLoading
+                      ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Checking rates…</>
+                      : <><RefreshCw className="w-3.5 h-3.5" /> Check Rates & Couriers</>
+                    }
+                  </button>
+                </div>
+
+                {/* Courier selection */}
+                {serviceResults !== null && (
+                  <div>
+                    <p className="text-xs text-[#6366f1] font-semibold uppercase tracking-wider mb-2">
+                      Select Courier <span className="text-white/30 normal-case font-normal">(leave unselected for auto)</span>
+                    </p>
+                    {serviceResults.length === 0 ? (
+                      <p className="text-xs text-white/40">No couriers available for this route.</p>
+                    ) : (
+                      <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
+                        {serviceResults.map((c) => {
+                          const id = String(c.courier_id || c.id || c.name);
+                          const isSelected = selectedCourier === id;
+                          return (
+                            <button
+                              key={id}
+                              onClick={() => setSelectedCourier(isSelected ? '' : id)}
+                              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl border text-sm transition-all cursor-pointer ${
+                                isSelected
+                                  ? 'border-[#6366f1] bg-[#6366f1]/10 text-white'
+                                  : 'border-white/10 bg-white/[0.03] text-white/70 hover:bg-white/5'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2">
+                                {isSelected && <Check className="w-3.5 h-3.5 text-[#6366f1]" />}
+                                <span>{c.courier_name || c.name || id}</span>
+                              </div>
+                              <span className="text-white/50 text-xs">
+                                {c.rate != null ? `₹${c.rate}` : c.total_charges != null ? `₹${c.total_charges}` : ''}
+                                {c.etd ? ` · ${c.etd}` : ''}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Actions */}
+                <div className="flex gap-3 pt-1">
+                  <button
+                    onClick={() => !busy && setPushModal(null)}
+                    className="flex-1 px-4 py-2.5 rounded-xl border border-white/10 text-sm text-white/60 hover:bg-white/5 transition-colors cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={confirmPush}
+                    disabled={busy}
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#6366f1] hover:bg-[#6366f1]/90 text-white text-sm font-semibold transition-colors cursor-pointer disabled:opacity-60"
+                  >
+                    {busy
+                      ? <><Loader2 className="w-4 h-4 animate-spin" /> Pushing…</>
+                      : <><Send className="w-4 h-4" /> Confirm Push</>
+                    }
+                  </button>
+                </div>
               </div>
             </motion.div>
           </motion.div>
